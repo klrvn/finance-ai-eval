@@ -1,0 +1,15 @@
+# 杜邦恒等式为内部一致性检查（对作品自报数值求值，无需外部真值）：
+#   贵州茅台自报 ROE ≈ 净利润率 × 总资产周转率 × 权益乘数。
+# 三项驱动因素作为 present 字段被提取，供 reconcile 公式引用；其数值真实性由引用核验（grounding）判定，
+# 数值准确性（vs 权威财报）在 must-fetch 默认下不做客观核验（无 GT），留待盲评 D2 与引用核验。
+fields:
+  moutai_net_margin:        {type: present}   # 净利润率（供 reconcile 引用）
+  moutai_asset_turnover:    {type: present}   # 总资产周转率
+  moutai_equity_multiplier: {type: present}   # 权益乘数
+  moutai_roe:               {type: reconcile, formula: "moutai_net_margin * moutai_asset_turnover * moutai_equity_multiplier", tol: 0.005, rel: false, methodology: true}
+  companies_covered:        {type: count_eq, target: 4}    # 茅台 + 三家同业
+  peer_dupont_present:      {type: present, note: "三家同业均给出同口径杜邦三因子拆解"}
+  driver_difference_analysis: {type: present, note: "跨公司 ROE 驱动因素差异分析"}
+  competitive_advantage_identified: {type: count_min, target: 4, note: "每家公司的核心竞争力来源判断"}
+  earnings_quality_discussed: {type: present}
+  cited_financials_count:   {type: count_min, target: 6, grounding: true, note: "营收/净利/总资产/净资产等，注明来源与报告期"}

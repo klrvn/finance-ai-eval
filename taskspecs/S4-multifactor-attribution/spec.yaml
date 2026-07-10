@@ -1,0 +1,35 @@
+task_id: S4
+version: 2.0.0
+family: multifactor-attribution
+tier: T2
+persona: 量化研究员 / 投资组合经理
+prompt_text: >
+  沪深300指数过去3年跑输中证500，请将这一差异拆解为：(1) 行业配置效应（哪些行业拖了后腿）；
+  (2) 风格因子暴露效应（大小盘、价值/成长等CNE5因子）；(3) 个股选择效应（Brinson归因残差）。
+measurable_outputs:
+  - 沪深300 相对中证500 的 3 年累计收益差（数值）
+  - 行业配置效应：分行业的拖累/贡献，指出主要拖后腿的行业
+  - 风格因子暴露效应：至少覆盖 CNE5 主要因子（规模/大小盘、价值-成长等）的暴露差异与其收益贡献
+  - 个股选择效应（Brinson 残差）
+  - 三项效应之和与总收益差的勾稽
+rubric_weights: {D1: 15, D2: 30, D3: 15, D4: 20, D5: 5, D6: 15}
+objective_dims: [D2]
+citation_policy: {mode: sample, k: 5}
+cf_rules: [CF1, CF3, CF5]
+required_inputs:
+  - name: index_constituents_and_returns
+    needed_for: "两指数的行业权重/收益（行业配置与选择效应）"
+    na_policy: "作品自取；magnitudes 靠引用核验，三效应之和对总差的勾稽始终可查"
+  - name: cne5_factor_exposures
+    needed_for: "风格因子暴露效应"
+    na_policy: "作品自取；因子归因无共享计算器，数值不做客观核验（无 GT），靠盲评 D2 + 引用"
+task_validators:
+  - {name: decomposition_reconciliation, realized_by: "checkpoint decomposition_reconciles (consistency: 三效应之和 == 总收益差)"}
+  - {name: sector_leg_optional_calculator, realized_by: "若提供两指数的行业级 w/r 样本，可用共享 brinson 计算器客观核验配置/选择腿（见 gt_recipe）"}
+  - {name: factor_leg_methodology, realized_by: "盲评 D2/D4：CNE5 因子暴露与收益贡献的方法是否正确、是否落到具体因子"}
+engine_requirements:
+  calculator: none                 # 默认 must-fetch；可选 brinson 覆盖行业腿（见 gt_recipe）
+  gt_kind: internal_consistency
+  checkpoint_types: [present, consistency, count_min]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

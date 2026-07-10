@@ -1,0 +1,31 @@
+task_id: S7
+version: 1.0.0
+family: fund-screen
+tier: T2
+persona: 基金筛选师
+prompt_text: >
+  Screen [China onshore equity funds / US large-cap equity ETFs] and give a shortlist of five, with a
+  comparison table containing: 3-year and 5-year annualized return, annualized volatility, Sharpe ratio,
+  max drawdown, expense ratio, AUM, and a holdings-overlap note. Add a one-line recommendation for a
+  moderate-risk, long-term investor and rank the five. Cite the data source and as-of date.
+measurable_outputs:
+  - 五行的表，八个指定列均填满
+  - 带适配性理由的排序推荐
+  - 来源与截至日期
+rubric_weights: {D1: 25, D2: 15, D3: 20, D4: 15, D5: 15, D6: 10}
+objective_dims: []                  # 无权威 NAV 时单元格记 NA；D1/D2 由盲评评定（见 tier 说明）
+citation_policy: {mode: per_cell_sample}
+cf_rules: [CF1, CF2, CF4]
+cf_thresholds: {CF2_uncited_ratio: 0.25}
+required_inputs:
+  - name: authoritative_fund_navs
+    needed_for: "metric_cells_verified 抽样核验（fund_metrics 计算器）"
+    na_policy: "无权威 NAV/指标 -> 单元格检查 NA；表格完整性与适配性仍评分"
+task_validators:
+  - {name: suitability_consistency, realized_by: "盲评 D5 关注点：排序是否契合'中等风险长期'画像（矛盾 -> D5 封顶证据）"}
+engine_requirements:
+  calculator: fund_metrics
+  gt_kind: calculator
+  checkpoint_types: [count_eq, present, sample_verify]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

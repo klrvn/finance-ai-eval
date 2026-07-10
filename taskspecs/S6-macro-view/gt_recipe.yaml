@@ -1,0 +1,10 @@
+recipe_id: macro_snapshot
+kind: user_snapshot
+rationale: >
+  宏观观点的"真值"是用户提供的当前宏观数据快照（CPI、GDP、政策利率、市场隐含概率等）。核心评测靠
+  全量引用核验（citation_policy: full）而非数值真值——引用是否真实、是否支撑主张、是否新鲜。
+groundtruth_output:
+  when_provided: "编排器把快照原样写入 groundtruth.values；数据点检查据此核验"
+  when_absent:   "{values: null, recipe: macro_snapshot, self_check: {passed: true}}；grounding 检查点 -> NA"
+inputs_required:
+  - {name: macro_snapshot.json, na_policy: "缺失 -> quantified_datapoints NA；引用核验与研判仍全评"}

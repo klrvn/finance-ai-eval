@@ -1,0 +1,29 @@
+task_id: S3
+version: 1.0.0
+family: fixed-income-analytics
+tier: T1
+persona: 固定收益专家
+prompt_text: >
+  For fixed-coupon bond [BOND CODE] with settlement date [DATE], compute and report: clean price, dirty
+  price, accrued interest, yield-to-maturity, Macaulay duration, modified duration, DV01, and convexity.
+  State the day-count convention and compounding basis used. If the bond is callable, additionally report
+  option-adjusted spread (OAS) and state the model assumptions.
+measurable_outputs:
+  - 8 个（若可赎回则为 10 个）带正确单位的数值量
+  - 明确说明计息天数惯例与复利方式
+rubric_weights: {D1: 15, D2: 35, D3: 20, D4: 5, D5: 5, D6: 20}
+objective_dims: [D1, D2]
+citation_policy: {mode: none}
+cf_rules: [CF1, CF5]
+required_inputs:
+  - name: bond_params
+    needed_for: "bond_analytics 计算器（票息、日期、结算日、计息惯例，市场净价或收益率其一）"
+    na_policy: "自包含；参数齐全即可算。OAS 需曲线+波动率模型，超范围，记 null。"
+task_validators:
+  - {name: convention_consistency, realized_by: "校验 day_count_stated/compounding_stated 与真值 notes 中实际所用惯例一致（不一致 -> D2 扣分证据）"}
+engine_requirements:
+  calculator: bond_analytics
+  gt_kind: calculator
+  checkpoint_types: [number, bp, yr, present]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

@@ -1,0 +1,33 @@
+task_id: S8
+version: 1.0.0
+family: portfolio-advisory
+tier: T3
+persona: 财富管理顾问
+prompt_text: >
+  Diagnose the attached client portfolio: quantify concentration, asset-class/style mix, notable risk
+  exposures, and blended fee. Identify the three most material issues. Then produce a rebalancing proposal
+  with specific target weights, the expected impact on risk and expected return, and a short client-ready
+  summary. Flag any suitability concerns given the client profile.
+client_profile: "年龄 45 岁，中等风险承受能力，15 年投资期限，退休目标"
+measurable_outputs:
+  - 量化的诊断指标（第一大持仓 %、权益 %、综合费率、集中度度量）
+  - 恰好三个实质问题的具名清单
+  - 当前权重与目标权重，二者均加总为 100%
+  - 声明的预期风险/收益影响
+  - 一个适配性标记（或明确的"无顾虑"）
+rubric_weights: {D1: 15, D2: 15, D3: 15, D4: 20, D5: 25, D6: 10}
+objective_dims: [D2]
+citation_policy: {mode: none}
+cf_rules: [CF1, CF5]
+required_inputs:
+  - name: s8_client.(csv|xlsx)
+    needed_for: "client_metrics 计算器（当前持仓 + 权重 + 费用）"
+    na_policy: "自包含；样本齐全即可算"
+task_validators:
+  - {name: suitability_rules, realized_by: "盲评 D5 硬规则：对中等风险 15 年期客户的高杠杆/激进倾向将 D5 封顶为等级 1"}
+engine_requirements:
+  calculator: client_metrics       # linear_shock.py --metrics
+  gt_kind: calculator
+  checkpoint_types: [number, present, count_eq, sum_to]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

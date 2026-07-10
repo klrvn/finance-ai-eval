@@ -1,0 +1,38 @@
+task_id: S2
+version: 1.0.0
+family: quant-backtest
+tier: T1
+persona: 量化研究员
+prompt_text: >
+  Backtest a monthly-rebalanced, long-only strategy on the constituents of CSI 300 that each month holds
+  an equal-weighted basket of the top quintile by 12-month-minus-1-month price momentum. Period
+  2019-01-01 to 2024-12-31, benchmark CSI 300 total return, commission 0.10%, slippage 0.10%. Report
+  annualized return, annualized volatility, Sharpe ratio, max drawdown, annualized excess return vs
+  benchmark, and average monthly turnover. Provide the cumulative-return curve, the drawdown chart, and
+  export the daily NAV series.
+measurable_outputs:
+  - 六个具名指标（数值形式）
+  - 两张图表（权益曲线、回撤）
+  - 每日 NAV 序列文件
+rubric_weights: {D1: 20, D2: 25, D3: 20, D4: 10, D5: 5, D6: 20}
+objective_dims: [D1, D2]
+citation_policy: {mode: none}
+cf_rules: [CF1, CF3, CF5]
+required_inputs:
+  - name: prices.csv
+    needed_for: "指标基准真值（momentum_backtest 计算器）"
+    na_policy: "市场数据缺失 -> 指标检查点 NA；仅回退到 NAV 复现一致性（CF3 防护）"
+  - name: benchmark.csv
+    needed_for: "超额收益基准真值"
+    na_policy: "缺失 -> ann_excess_return NA"
+  - name: membership.csv
+    needed_for: "point-in-time 成分股（可选，避免幸存者偏差）"
+    na_policy: "可选；缺失则用全样本近似并在报告注明"
+task_validators:
+  - {name: nav_reproduction, realized_by: "checkpoint nav_reproduces_metrics (consistency, validator: nav_reproduction) — 从提交 NAV 重算 sharpe/ann_return；失败且无轨迹 -> CF3 证据"}
+engine_requirements:
+  calculator: momentum_backtest
+  gt_kind: calculator
+  checkpoint_types: [pct, number, present, count_min, consistency]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

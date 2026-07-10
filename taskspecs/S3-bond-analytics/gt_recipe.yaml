@@ -1,0 +1,11 @@
+recipe_id: bond_analytics
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/bond_analytics.py
+  sidecar: skills/eval-groundtruth/scripts/bond_analytics.calculator.yaml
+  invocation: "--params {params} --out {out}"
+  produces: [clean_price, dirty_price, accrued_interest, ytm, macaulay_duration, modified_duration, dv01, convexity]
+  out_of_scope: [oas]
+self_check: required
+inputs_required:
+  - {name: bond_params.json, na_policy: "自包含；OAS -> NA（超范围）"}

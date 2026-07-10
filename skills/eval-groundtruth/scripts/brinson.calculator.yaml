@@ -1,0 +1,12 @@
+calculator_id: brinson
+script: brinson.py
+version: "1.0"
+family: attribution
+deterministic: true
+network: false
+requires: [openpyxl]       # only for .xlsx fixtures; csv path is stdlib
+invocation: "--fixture {fixture} --out {out}"
+fixture_columns: [sector, w_p, r_p, w_b, r_b]
+model: "Brinson-Fachler single-period sector attribution"
+outputs: [allocation_by_sector, selection_by_sector, interaction_by_sector, total_active_return]
+self_check: "asserts Σ(alloc+sel+interaction) == R_p - R_b (identity); halts on failure"

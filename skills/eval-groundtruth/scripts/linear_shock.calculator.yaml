@@ -1,0 +1,19 @@
+calculator_id: linear_shock
+script: linear_shock.py
+version: "1.0"
+family: [risk-scenario, portfolio-advisory]   # two modes, two families
+deterministic: true
+network: false
+requires: [openpyxl]       # only for .xlsx fixtures
+modes:
+  shock:                   # S5 custom-shock leg
+    invocation: "--fixture {fixture} --shock {shock} --out {out}"
+    fixture_columns: [name, weight, beta_equity, beta_fx, credit_dv01]
+    shock_params: {equity: number, fx: number, credit_spread_bp: number, portfolio_value: number}
+    outputs: [custom_shock_pnl_pct, custom_shock_pnl_ccy, top5_contributors]
+    scope: "custom-shock leg only; historical replay needs a supplied scenario-returns set"
+  metrics:                 # S8 client_metrics (recipe_id: client_metrics)
+    invocation: "--fixture {fixture} --metrics --out {out}"
+    fixture_columns: [name, weight, asset_class, fee]
+    outputs: [top_holding_pct, equity_pct, blended_fee, concentration_measure_hhi]
+self_check: "emits self_check{passed}; dispatcher halts on passed==false"

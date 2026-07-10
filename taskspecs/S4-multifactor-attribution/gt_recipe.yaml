@@ -1,0 +1,19 @@
+recipe_id: multifactor_internal
+kind: internal_consistency
+rationale: >
+  该任务把两指数 3 年收益差拆成行业配置 + CNE5 风格因子 + 个股选择三腿。风格因子归因需要真实风险模型
+  （Barra CNE5），共享库无对应计算器；两指数的行业腿在提供样本时可由 brinson 计算器核验，但默认 must-fetch
+  下不附样本。因此默认可核验的客观锚点是**三效应之和 == 总收益差**（consistency，评分器求值），
+  其余靠盲评方法学 + 引用核验。默认写空 values、self_check 通过。
+groundtruth_output:
+  values: {}
+  recipe: multifactor_internal
+  self_check: {passed: true}
+inputs_required:
+  - {name: index_constituents_and_returns, na_policy: "缺省 must-fetch；行业腿 magnitude 无 GT"}
+  - {name: cne5_factor_exposures, na_policy: "缺省 must-fetch；因子腿无 GT"}
+optional_calculator_upgrade: >
+  行业配置/选择腿：若提供两指数的行业级 {sector, w_p, r_p, w_b, r_b} 样本（此处 p=沪深300、b=中证500），
+  可用现有共享计算器 `brinson`（family: attribution）客观核验该腿，将 allocation/selection 升级为
+  vector 型客观检查点。CNE5 因子腿仍无共享计算器——要做到客观核验需**新增 cne5_factor_attribution 计算器
+  （引擎级共享库新增，非本容器插件）**。两项齐备后本容器可升级为 objective_dims [D1,D2]。

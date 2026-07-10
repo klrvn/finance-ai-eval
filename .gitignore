@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Eval run artifacts (written to the user's cwd at runtime, not part of the plugin)
+eval-runs/
+run/
+
+# OS / editor
+.DS_Store
+Thumbs.db

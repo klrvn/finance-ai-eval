@@ -1,0 +1,5 @@
+fields:
+  directional_call_present: {type: present}
+  source_type_count:        {type: count_min, target: 3, grounding: true}
+  quantified_datapoints:    {type: count_min, target: 4, grounding: true}
+  named_risks_count:        {type: count_eq,  target: 2}

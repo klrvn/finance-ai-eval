@@ -1,0 +1,23 @@
+calculator_id: bond_analytics
+script: bond_analytics.py
+version: "1.0"
+family: fixed-income-analytics
+deterministic: true
+network: false
+requires: [QuantLib]
+invocation: "--params {params} --out {out}"
+params:
+  settlement_date: date
+  issue_date: date
+  maturity_date: date
+  coupon: number
+  frequency: "Annual|Semiannual|Quarterly"
+  face: number
+  day_count: "ActualActual|Thirty360|Actual365Fixed|Actual360"
+  calendar: "NullCalendar|China|UnitedStates|TARGET"
+  compounding: "Compounded|Continuous"
+  settlement_days: int
+  market_clean_price_or_yield: "provide EITHER market_clean_price OR market_yield"
+outputs: [clean_price, dirty_price, accrued_interest, ytm, macaulay_duration, modified_duration, dv01, convexity]
+out_of_scope: [oas]        # needs curve + vol model; returned null with a note
+self_check: "emits self_check{passed}; dispatcher halts the run on passed==false"

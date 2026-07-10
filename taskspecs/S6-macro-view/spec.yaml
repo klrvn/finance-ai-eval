@@ -1,0 +1,33 @@
+task_id: S6
+version: 1.0.0
+family: macro-view
+tier: T3
+persona: 顾问 / 策略师
+prompt_text: >
+  Give a one-page house view on the likely direction of the China 10-year government bond yield over the
+  next three months. Synthesize, at minimum: recent macro data (growth, inflation, monetary policy),
+  professional research, current news, and any market-implied or prediction-market probability available.
+  State a clear directional call, the key drivers, two credible risks to the view, and cite every factual
+  claim with its source and date.
+measurable_outputs:
+  - 明确的方向性判断（下行/持平/上行，附大致幅度或概率）
+  - 覆盖不少于 3 类不同来源的引用
+  - 不少于 4 个量化数据点
+  - 恰好两个具名风险
+rubric_weights: {D1: 30, D2: 10, D3: 15, D4: 25, D5: 10, D6: 10}
+objective_dims: [D1]               # D1 完全由引用核验锚定
+citation_policy: {mode: full}      # 核验每一条引用——这是防幻觉探针
+cf_rules: [CF1, CF2, CF4]
+cf_thresholds: {CF2_uncited_ratio: 0.25}
+required_inputs:
+  - name: macro_snapshot
+    needed_for: "量化数据点与真值比对（quantified_datapoints）"
+    na_policy: "未提供 -> 数据点检查 NA；引用与论点仍完全评分"
+task_validators:
+  - {name: source_type_classifier, realized_by: "引用核验器按来源类型归类，喂 source_type_count (count_min, grounding)"}
+engine_requirements:
+  calculator: none
+  gt_kind: user_snapshot
+  checkpoint_types: [present, count_min, count_eq]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

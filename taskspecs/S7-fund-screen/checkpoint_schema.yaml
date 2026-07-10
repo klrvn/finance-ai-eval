@@ -1,0 +1,9 @@
+# 提取为抽样单元格列表 [{fund, metric, value}]；与 groundtruth.values.funds[fund][metric] 比对，
+# 任一超容差即 fail（并作为 CF5）。无权威指标时记 NA。
+fields:
+  shortlist_count:        {type: count_eq, target: 5}
+  table_columns_complete: {type: present, note: "all 8 columns present for all 5 rows"}
+  metric_cells_verified:  {type: sample_verify, tol: 0.005, rel: true, grounding: true, methodology: true,
+                          note: "sampled cells vs supplied fund metrics"}
+  single_as_of_date:      {type: present}
+  ranking_present:        {type: present}

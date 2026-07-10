@@ -1,0 +1,19 @@
+recipe_id: dupont_internal
+kind: internal_consistency
+rationale: >
+  杜邦分析没有单一"正确答案"数值真值（依赖所取报告期与口径）。核心可核验点是**杜邦恒等式自洽**
+  （ROE == 净利率 × 周转率 × 杠杆）——由评分器的 reconcile 类型确定性判定；各公司财务数值的真实性由
+  引用核验（grounding）判定。因此默认写空 values、self_check 通过。
+groundtruth_output:
+  values: {}
+  recipe: dupont_internal
+  self_check: {passed: true}
+inputs_required:
+  - name: financial_statements
+    needed_for: "grounding：营收/净利/总资产/净资产的引用核验"
+    na_policy: "作品自取；数值真实性靠引用核验，恒等式自洽始终运行"
+optional_calculator_upgrade: >
+  若未来提供各公司权威财报样本（revenue/net_income/total_assets/equity），可新增一个 dupont_metrics
+  计算器（family: equity-fundamentals）产出各公司 net_margin/asset_turnover/equity_multiplier/roe 的真值，
+  将本容器升级为 T1、objective_dims [D1,D2]、gt_recipe.kind calculator。该计算器属**共享库新增（引擎级）**，
+  非本容器内插件。

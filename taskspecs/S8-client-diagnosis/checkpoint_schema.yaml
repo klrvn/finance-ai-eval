@@ -1,0 +1,9 @@
+fields:
+  top_holding_pct:           {type: number, tol: 0.005,  grounding: true, methodology: true}   # 来自样本
+  equity_pct:                {type: number, tol: 0.005,  grounding: true, methodology: true}
+  blended_fee:               {type: number, tol: 0.0002, grounding: true, methodology: true}
+  concentration_measure:     {type: present}
+  issues_count:              {type: count_eq, target: 3}
+  target_weights_sum:        {type: sum_to,   target: 1.0, tol: 0.005}
+  risk_return_impact_stated: {type: present}
+  suitability_flag_present:  {type: present}

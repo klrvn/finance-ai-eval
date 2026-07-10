@@ -1,0 +1,13 @@
+recipe_id: linear_shock
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/linear_shock.py
+  sidecar: skills/eval-groundtruth/scripts/linear_shock.calculator.yaml
+  invocation: "--fixture {fixture} --shock {shock} --out {out}"
+  produces: [custom_shock_pnl_pct, custom_shock_pnl_ccy, top5_contributors]
+  scope: "custom-shock leg only; historical replay needs a supplied scenario-returns set"
+self_check: required
+inputs_required:
+  - {name: "s5_portfolio.(csv|xlsx)", na_policy: "自定义冲击段自包含"}
+  - {name: "shock.json", na_policy: "缺失用题面默认冲击"}
+  - {name: "scenario_returns_2022", optional: true, na_policy: "缺失 -> historical_replay_pnl NA，仅评方法论"}

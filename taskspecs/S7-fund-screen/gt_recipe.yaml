@@ -1,0 +1,12 @@
+recipe_id: fund_metrics
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/fund_metrics.py
+  sidecar: skills/eval-groundtruth/scripts/fund_metrics.calculator.yaml
+  invocation: "--navs {navs} --static {static} --rf 0.0 --out {out}"   # navs = space-separated NAV csv paths
+  produces: "values.funds[fund][metric] for sampled-cell verification"
+  passthrough: [expense_ratio, aum]   # 不可计算，从 static.csv 透传
+self_check: required
+inputs_required:
+  - {name: "fund NAV csvs", na_policy: "无权威 NAV -> metric_cells_verified NA；表格/适配性仍评"}
+  - {name: "static.csv (expense_ratio, aum)", optional: true}

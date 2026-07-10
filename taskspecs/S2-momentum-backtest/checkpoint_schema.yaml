@@ -1,0 +1,13 @@
+# NAV 复现是"从提交的 NAV 文件重算 sharpe/ann_return 是否在容差内"——需重新执行，
+# 由专用验证器 nav_reproduction 处理（见 spec.task_validators），而非算术求值器。
+# 无 NAV 文件时记 NA，并作为 CF3 的证据输入（既无执行轨迹又无可复现产物 → CF3）。
+fields:
+  ann_return:           {type: pct,    tol: 0.0025, grounding: true, methodology: true}
+  ann_vol:              {type: pct,    tol: 0.0025, grounding: true, methodology: true}
+  sharpe:               {type: number, tol: 0.05,   grounding: true, methodology: true}
+  max_drawdown:         {type: pct,    tol: 0.0025, grounding: true, methodology: true}
+  ann_excess_return:    {type: pct,    tol: 0.0025, grounding: true, methodology: true}
+  avg_monthly_turnover: {type: pct,    tol: 0.01,   methodology: true}
+  nav_series_present:   {type: present}
+  charts_present:       {type: count_min, target: 2}
+  nav_reproduces_metrics: {type: consistency, validator: nav_reproduction, note: "recompute sharpe & ann_return from submitted NAV within tol"}

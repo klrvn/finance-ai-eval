@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "constitution": "rubrics/constitution.md",
+  "calculator_library": "skills/eval-groundtruth/scripts",
+  "checkpoint_type_registry": [
+    "number", "pct", "bp", "yr", "ratio",
+    "count_eq", "count_min", "sum_to", "present",
+    "vector", "set_match",
+    "reconcile", "consistency", "monotonic",
+    "sample_verify"
+  ],
+  "author": {
+    "component": "eval-task-designer",
+    "status": "not_built",
+    "note": "Containers are hand-authored for now (S1-S8 are the legacy migration set and serve as few-shot exemplars). The RAG-backed designer subagent will slot in here; see docs/two-layer-architecture.md §3 and taskspecs/README.md."
+  },
+  "tasks": [
+    {"task_id": "S1", "title": "杜邦分析与同业对比",       "family": "equity-fundamentals",  "tier": "T2", "version": "2.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S1-dupont-analysis"},
+    {"task_id": "S2", "title": "量化策略回测",             "family": "quant-backtest",       "tier": "T1", "version": "1.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S2-momentum-backtest"},
+    {"task_id": "S3", "title": "固定收益工具分析",         "family": "fixed-income-analytics","tier": "T1", "version": "1.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S3-bond-analytics"},
+    {"task_id": "S4", "title": "多因子业绩归因（指数对比）", "family": "multifactor-attribution", "tier": "T2", "version": "2.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S4-multifactor-attribution"},
+    {"task_id": "S5", "title": "风险压力测试与情景分析",   "family": "risk-scenario",        "tier": "T2", "version": "1.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S5-stress-test"},
+    {"task_id": "S6", "title": "多来源宏观观点",           "family": "macro-view",           "tier": "T3", "version": "1.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S6-macro-view"},
+    {"task_id": "S7", "title": "基金筛选与对比",           "family": "fund-screen",          "tier": "T2", "version": "1.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S7-fund-screen"},
+    {"task_id": "S8", "title": "客户组合诊断与建议",       "family": "portfolio-advisory",   "tier": "T3", "version": "1.0.0", "status": "frozen", "origin": "legacy-v1", "golden": "pending", "path": "taskspecs/S8-client-diagnosis"}
+  ]
+}

@@ -1,0 +1,16 @@
+calculator_id: momentum_backtest
+script: momentum_backtest.py
+version: "1.0"
+family: quant-backtest
+deterministic: true
+network: false
+requires: [pandas, numpy]
+invocation: "--prices {prices} --benchmark {benchmark} [--membership {membership}] --start 2019-01-01 --end 2024-12-31 --commission 0.001 --slippage 0.001 --out {out}"
+inputs:
+  prices.csv: "date index + one column per ticker (adjusted close)"
+  benchmark.csv: "columns: date, level"
+  membership.csv: "optional; columns: date, ticker (point-in-time constituents)"
+outputs: [ann_return, ann_vol, sharpe, max_drawdown, ann_excess_return, avg_monthly_turnover]
+side_outputs: ["nav.csv written next to --out"]
+needs_market_data: true    # if absent, orchestrator falls back to NAV-reproduction consistency only
+self_check: "emits self_check{passed}; dispatcher halts on passed==false"

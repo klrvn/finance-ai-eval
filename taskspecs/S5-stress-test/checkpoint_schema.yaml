@@ -1,0 +1,11 @@
+fields:
+  custom_shock_pnl_pct:  {type: number, tol: 0.005,            grounding: true, methodology: true}   # 可由敞口重算
+  custom_shock_pnl_ccy:  {type: number, tol: 0.01, rel: true,  grounding: true, methodology: true}
+  # 提取为名称列表；tol=1 表示至多漏掉 1 个真实的前 5 大贡献者（即 5 命中 4 即可）。
+  top5_contributors:     {type: set_match, tol: 1, grounding: true, note: "identity of top-5 vs recomputed"}
+  var_99_present:        {type: present}
+  es_present:            {type: present}
+  methodology_stated:    {type: present}
+# 历史重放段：除非提供 2022 情景收益集合，否则为 NA（不评数值，仅评方法论）。
+conditional_na:
+  historical_replay_pnl: {type: number, note: "NA unless a 2022 scenario-returns set is supplied"}

@@ -1,0 +1,34 @@
+task_id: S1
+version: 2.0.0
+family: equity-fundamentals
+tier: T2
+persona: 研究员
+prompt_text: >
+  对贵州茅台进行杜邦分析拆解，并与同行业公司（如五粮液、泸州老窖、山西汾酒）进行商业模式对比。
+  通过 ROE 驱动因素（净利润率、总资产周转率、权益乘数）的差异分析，识别各家公司的核心竞争力来源和盈利质量差异。
+measurable_outputs:
+  - 贵州茅台的杜邦拆解：ROE 及三项驱动因素（净利润率、总资产周转率、权益乘数）
+  - 三家同业公司（五粮液、泸州老窖、山西汾酒）的同口径杜邦拆解
+  - 各公司 ROE = 净利润率 × 总资产周转率 × 权益乘数 的恒等式自洽
+  - 跨公司 ROE 驱动因素差异分析（谁靠利润率、谁靠周转、谁靠杠杆）
+  - 每家公司的核心竞争力来源判断，以及盈利质量差异讨论
+  - 所用财务数据（营收/净利/总资产/净资产）注明来源与报告期
+rubric_weights: {D1: 20, D2: 25, D3: 15, D4: 25, D5: 5, D6: 10}
+objective_dims: [D2]
+citation_policy: {mode: sample, k: 5}
+cf_rules: [CF1, CF2, CF3, CF5]
+cf_thresholds: {CF2_uncited_ratio: 0.25}
+required_inputs:
+  - name: financial_statements
+    needed_for: "各公司净利润率/总资产周转率/权益乘数的数据依据（营收、净利、总资产、净资产）"
+    na_policy: "作品须自行获取（题目未附数据）；数值真实性靠引用核验，杜邦恒等式自洽始终可查。若提供权威财报样本则可升级为 calculator 客观核验（见 gt_recipe）"
+task_validators:
+  - {name: dupont_identity, realized_by: "checkpoint roe_dupont_reconcile (reconcile: ROE == 净利率×周转×杠杆)"}
+  - {name: peer_comparison_completeness, realized_by: "checkpoint companies_covered (count_eq 4) + 盲评 D3/D4"}
+  - {name: earnings_quality, realized_by: "盲评 D4 关注点：盈利质量差异是否有实质分析（现金流/应收/毛利结构）"}
+engine_requirements:
+  calculator: none
+  gt_kind: internal_consistency
+  checkpoint_types: [present, reconcile, count_eq, count_min]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

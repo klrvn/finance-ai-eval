@@ -1,0 +1,16 @@
+# 关键客观锚点为**分解勾稽**（内部一致性，对作品自报数值求值，无需外部真值）：
+#   行业配置效应 + 风格因子效应 + 个股选择效应 ≈ 沪深300−中证500 的总收益差。
+# must-fetch 默认下各效应的 magnitude 无 GT，故用 present + consistency + 盲评；不使用 vector/number 型
+# （否则会触发 lint 的"数值型检查点需真值路径"）。若提供行业级 w/r 样本，可另启 brinson 计算器客观核验行业腿。
+fields:
+  return_gap_value:          {type: present, note: "沪深300 − 中证500 的 3 年累计收益差（数值，供勾稽 rhs 引用）"}
+  allocation_effect_total:   {type: present, note: "行业配置效应合计（自报，供勾稽 lhs）"}
+  factor_effect_total:       {type: present, note: "风格因子暴露效应合计（自报）"}
+  selection_effect_total:    {type: present, note: "个股选择效应/Brinson 残差合计（自报）"}
+  decomposition_reconciles:  {type: consistency, tol: 0.005, methodology: true,
+                             lhs: "allocation_effect_total + factor_effect_total + selection_effect_total",
+                             rhs: "return_gap_value"}
+  sector_allocation_by_industry: {type: present, note: "分行业配置效应，指出主要拖后腿行业"}
+  cne5_factors_covered:      {type: count_min, target: 2, methodology: true, note: "至少覆盖规模/大小盘、价值-成长等主要 CNE5 因子"}
+  selection_effect_present:  {type: present, note: "个股选择效应（Brinson 残差）已给出"}
+  cited_data_count:          {type: count_min, target: 3, grounding: true, note: "指数/因子数据注明来源与区间"}

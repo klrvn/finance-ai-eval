@@ -1,0 +1,37 @@
+task_id: S5
+version: 1.0.0
+family: risk-scenario
+tier: T2
+persona: 风险经理
+prompt_text: >
+  For the attached portfolio, estimate P&L and % drawdown under: (a) a historical replay of the 2022
+  global rate-shock episode; and (b) a custom shock - equities -20%, credit spreads +150 bp, CNY -5% vs
+  USD. For each scenario report total portfolio P&L (% and currency), the top-5 position-level
+  contributors to loss, a 1-day 99% VaR and Expected Shortfall estimate. State methodology and assumptions.
+measurable_outputs:
+  - 各情景损益（% 与金额）
+  - 各情景前 5 大贡献方清单
+  - 1 日 99% VaR 与 ES 数值
+  - 明确的方法论声明
+rubric_weights: {D1: 15, D2: 30, D3: 15, D4: 20, D5: 10, D6: 10}
+objective_dims: [D2]
+citation_policy: {mode: sample, k: 3}
+cf_rules: [CF1, CF3, CF5]
+required_inputs:
+  - name: s5_portfolio.(csv|xlsx)
+    needed_for: "linear_shock 计算器（含权重与因子敏感度的持仓）"
+    na_policy: "自定义冲击段自包含可算"
+  - name: shock.json
+    needed_for: "自定义冲击幅度"
+    na_policy: "题目已给定冲击；缺失则用题面默认值"
+  - name: scenario_returns_2022
+    needed_for: "历史重放段真值"
+    na_policy: "未提供 -> historical_replay_pnl 记 NA，仅评方法论"
+task_validators:
+  - {name: assumptions_extraction, realized_by: "提取器抽出所声明假设，喂 methodology_stated 存在性检查与盲评 D4"}
+engine_requirements:
+  calculator: linear_shock
+  gt_kind: calculator
+  checkpoint_types: [number, set_match, present]
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.0"

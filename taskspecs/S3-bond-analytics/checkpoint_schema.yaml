@@ -1,0 +1,14 @@
+fields:
+  clean_price:        {type: number, tol: 0.05, rel: true,  grounding: true, methodology: true}
+  dirty_price:        {type: number, tol: 0.05, rel: true,  grounding: true, methodology: true}
+  accrued_interest:   {type: number, tol: 0.01,             grounding: true, methodology: true}
+  ytm:                {type: bp,     tol: 1,                 grounding: true, methodology: true}
+  macaulay_duration:  {type: yr,     tol: 0.02,             grounding: true, methodology: true}
+  modified_duration:  {type: yr,     tol: 0.02,             grounding: true, methodology: true}
+  dv01:               {type: number, tol: 0.01, rel: true,  grounding: true, methodology: true}
+  convexity:          {type: number, tol: 0.05, rel: true,  grounding: true, methodology: true}
+  day_count_stated:   {type: present}
+  compounding_stated: {type: present}
+# 可赎回债券的 OAS 为条件项：需曲线+波动率模型，静态计算器超范围，记 NA。
+conditional_na:
+  oas: {type: number, note: "callable only; needs curve + vol model -> NA for the static calculator"}

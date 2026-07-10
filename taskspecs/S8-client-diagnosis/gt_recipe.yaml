@@ -1,0 +1,11 @@
+recipe_id: client_metrics
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/linear_shock.py
+  sidecar: skills/eval-groundtruth/scripts/linear_shock.calculator.yaml
+  invocation: "--fixture {fixture} --metrics --out {out}"
+  produces: [top_holding_pct, equity_pct, blended_fee, concentration_measure_hhi]
+  note: "client_metrics is the --metrics mode of linear_shock.py (shared calculator, two modes)"
+self_check: required
+inputs_required:
+  - {name: "s8_client.(csv|xlsx)", na_policy: "自包含"}

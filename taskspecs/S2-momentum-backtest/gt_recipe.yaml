@@ -1,0 +1,13 @@
+recipe_id: momentum_backtest
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/momentum_backtest.py
+  sidecar: skills/eval-groundtruth/scripts/momentum_backtest.calculator.yaml
+  invocation: "--prices {prices} --benchmark {benchmark} [--membership {membership}] --start 2019-01-01 --end 2024-12-31 --commission 0.001 --slippage 0.001 --out {out}"
+  produces: [ann_return, ann_vol, sharpe, max_drawdown, ann_excess_return, avg_monthly_turnover]
+  side_outputs: ["nav.csv (written next to --out)"]
+self_check: required        # halts the run if self_check.passed == false
+inputs_required:
+  - {name: prices.csv,    na_policy: "缺失 -> 指标检查点 NA；仅跑 NAV 复现一致性"}
+  - {name: benchmark.csv, na_policy: "缺失 -> ann_excess_return NA"}
+  - {name: membership.csv, optional: true}
