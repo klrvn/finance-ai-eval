@@ -1,0 +1,50 @@
+recipe_id: news_search_snapshot
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/news_search_snapshot.py
+  sidecar: skills/eval-groundtruth/scripts/news_search_snapshot.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    - Q1_1_latest_anthropic_model
+    - Q1_2_kimi_k3_pricing_all3
+    - Q1_2_kimi_k3_pricing_set
+    - Q1_3_waic_editions
+    - Q2_1_acquisition_completion_date
+    - Q2_2_revenue_commitment_3y
+    - Q2_3_deal_terms
+    - Q3_1_epic_fury_order_date
+    - Q3_2_two_week_ceasefire_date
+    - Q3_3_strait_reopen_announced_date
+    - Q3_4_islamabad_talks_window
+    - Q3_5_mou_signed_date
+    - Q3_6_truce_declared_over_date
+  side_outputs: []
+# percent_fields 故意留空。本任务唯一的百分比量 stake_pct 是 vector 检查点
+# Q2_3_deal_terms 的成员，而两侧都不会被百分比规范化：
+#   - 提取器的 validators.py 只对标量数值类型（number/pct/bp/yr/ratio/reconcile/sum_to）
+#     做 "%" -> fraction 换算，vector 字段的成员原样透传；
+#   - gt_dispatch.apply_percent_canon 只处理标量 GT 值（isinstance 数值判断），dict 会被跳过。
+# 因此双方统一停留在 percent-magnitude 口径（60 表示 60%），并由 checkpoint description
+# 与 spec.extraction_notes 明确要求提取器不要换算成小数。若将来把 stake 拆成独立标量检查点，
+# 必须同步在此声明 percent_fields，否则正确答案会在 tol=0 下纯因量纲不一致而失败
+# （S9 v2.4.3 / S10 v1.0.1 都踩过这个坑）。
+percent_fields: []
+self_check: required        # halts the run if self_check.passed == false
+inputs_required:
+  - name: groundtruth_snapshot.json
+    na_policy: "可选(override); 默认 GT 为计算器内嵌的冻结答案键, 不需要此文件; 提供 --snapshot 时覆盖内嵌键"
+fixtures:
+  dir: fixtures
+  files:
+    snapshot: groundtruth_snapshot.json   # 内嵌答案键的可读镜像 / 可选 override
+  migration_note: >
+    v1.1: snapshot-to-GT calculator。GT 为来自题库标准答案文档的冻结答案键——12 个分点全部是
+    截至 2026-07-27 数据核验时点的确定事实，无需实时抓取。计算器 news_search_snapshot.py
+    内嵌答案键并展开为 13 个检查点值，输出结构化 self_check（完整性 + 形状 + 日期合法性 +
+    双日容错编码合法性 + 两日会谈窗口确为连续两天 + 拆分腿一致性）。
+    fixtures/groundtruth_snapshot.json 为答案键的可读镜像，也可作为 --snapshot override 传入
+    （同样的扁平结构）。
+    编码约定：日期 = YYYYMMDD 整数；三个多来源口径差异日期（题目三第 2、5、6 点）= 相邻两日
+    中点的半整数 + tol 0.5；题目三第 4 点的两日会谈 = 两成员 vector（tol=0，两日全对才给分）；
+    价格 = 美元 / 100 万 token；金额 = 亿元；股权比例 = 百分数数值。
+    12 分制由 spec.grounding_group_weights 从 13 个检查点组装（仅 Q1_2 为两条腿的复合分点）。

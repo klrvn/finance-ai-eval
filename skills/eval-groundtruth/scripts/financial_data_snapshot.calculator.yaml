@@ -1,0 +1,59 @@
+calculator_id: financial_data_snapshot
+script: financial_data_snapshot.py
+version: "1.0"
+family: data-retrieval
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+inputs:
+  groundtruth_snapshot.json: "(optional) override answer key JSON (same nested shape as embedded ANSWER_KEY); default GT is the embedded frozen answer key"
+outputs:
+  # 3 companies x 3 fiscal years x 3 metrics = 27 flat checkpoint values
+  - ZTE_2023_net_profit
+  - ZTE_2023_roe
+  - ZTE_2023_inventory
+  - ZTE_2024_net_profit
+  - ZTE_2024_roe
+  - ZTE_2024_inventory
+  - ZTE_2025_net_profit
+  - ZTE_2025_roe
+  - ZTE_2025_inventory
+  - POPMART_2023_net_profit
+  - POPMART_2023_roe
+  - POPMART_2023_inventory
+  - POPMART_2024_net_profit
+  - POPMART_2024_roe
+  - POPMART_2024_inventory
+  - POPMART_2025_net_profit
+  - POPMART_2025_roe
+  - POPMART_2025_inventory
+  - NVDA_2023_net_profit
+  - NVDA_2023_roe
+  - NVDA_2023_inventory
+  - NVDA_2024_net_profit
+  - NVDA_2024_roe
+  - NVDA_2024_inventory
+  - NVDA_2025_net_profit
+  - NVDA_2025_roe
+  - NVDA_2025_inventory
+side_outputs: []
+needs_market_data: false
+self_check: "emits self_check{passed}; verifies all 27 values present, numeric, finite, ROE within plausible band"
+calibers:
+  net_profit: "归属母公司股东的净利润 (归母净利润)"
+  roe: "加权净资产收益率 (percent)"
+  inventory: "资产负债表 存货/Inventories 期末余额"
+rounding: "net_profit/inventory -> 2 decimals; roe -> 2 decimals of percent"
+data_cutoff: "2026-07-20"
+companies:
+  ZTE: "中兴通讯 000063.SZ (A股/深交所, CNY 亿元)"
+  POPMART: "泡泡玛特 09992.HK (港股/港交所, CNY 亿元)"
+  NVDA: "英伟达 NVDA.O (美股/纳斯达克, USD 亿美元; 财年1月末结束)"
+migration_note: >
+  v1.0: snapshot-to-GT calculator. Ground truth is a FROZEN answer key from company filings,
+  packed as an embedded constant (nothing to fetch — the three figures are definite reported
+  values). Flattens the nested answer key into 27 {COMPANY_FY_METRIC} checkpoint values and
+  emits a structural self_check (completeness + numeric sanity). --snapshot optionally overrides
+  the embedded key with an updated one of the same nested shape. Mirrors S9's legacy v1.0
+  snapshot mode but network-free and with no cross-derivation (independent filing figures).

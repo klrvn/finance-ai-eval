@@ -13,7 +13,7 @@ measurable_outputs:
   - 各情景前 5 大贡献方清单
   - 1 日 99% VaR 与 ES 数值
   - 明确的方法论声明
-rubric_weights: {D1: 15, D2: 30, D3: 15, D4: 20, D5: 10, D6: 10}
+rubric_weights: {D1: 15, D2: 20, D3: 15, D4: 20, D5: 10, D6: 20}
 objective_dims: [D2]
 citation_policy: {mode: sample, k: 3}
 cf_rules: [CF1, CF3, CF5]

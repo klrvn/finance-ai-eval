@@ -1,0 +1,147 @@
+task_id: S11
+version: 1.1.0
+family: news-data-retrieval
+tier: T1
+persona: 研究员
+prompt_text: >
+  金融消息面 Web Search 能力测试 — 新闻/公告/政策时间线取数。
+
+  Your role: Financial research analyst covering news flow (消息面).
+  Situation: Answer the 12 questions below by retrieving the facts from the web. Every answer is a
+  definite, checkable fact. Report each answer with the source you retrieved it from.
+
+  --- 规则（第一优先级规则）---
+    1. 答案应与题目指定来源或监管原文口径一致。
+    2. 不得以未经说明的媒体约数替代机构报告中的精确值。
+    3. 涉及时间线时，以事件实际发生日或政策生效日为准。
+    4. 所有日期需写明年份。
+    5. 数据核验时点：2026年7月27日。此日期之后的事件无需考虑。
+
+  --- 题目一：AI 新闻 ---
+    1. Anthropic 推出的最新款大模型是什么？
+    2. Kimi K3 官方的 input cache-miss、input cache-hit 和 output API 价格分别是多少（以美元作答）？
+    3. 世界人工智能大会(WAIC)总共举办过多少届？
+
+  --- 题目二：黑芝麻智能收购亿智电子 ---
+    1. 黑芝麻智能哪天正式发布公告完成对亿智电子的股份收购？
+    2. 黑芝麻智能与亿智电子签订的业绩承诺，约定 2026-2028 的三年累计含税营业收入不低于多少？
+    3. 此项收购的交易金额是多少？黑芝麻智能最终持有了多少亿智电子的股权？
+
+  --- 题目三：霍尔木兹海峡重要时间线 ---
+    请写出下列六项与 2026 年霍尔木兹海峡危机相关事件发生的日期。日期应精确到日。
+    1. 美国总统特朗普下令执行“史诗狂怒”（Operation Epic Fury）。
+    2. 美国宣布接受由巴基斯坦调解的两周临时停火安排，恢复海峡航运被列为条件之一。
+    3. 伊朗 4 月曾宣布重新开放霍尔木兹海峡航运。
+    4. 美伊在巴基斯坦进行伊斯兰堡会谈的两日日期。
+    5. 美国总统与伊朗总统正式签署谅解备忘录。
+    6. 美国总统正式宣布此前的休战安排已经结束。
+
+  --- Required deliverables ---
+    For every one of the 12 questions:
+      1. The answer itself, in the caliber the question asks for (价格以美元标明计价单位；金额标明
+         单位；日期精确到日并写明年份；两日会谈须给出起止两天)。
+      2. The source you retrieved it from (官方公告 / 监管披露 / 官方定价页 / 新闻机构时间线 +
+         链接或标题 + as-of 日期)。
+    State the 数据核验时点 you worked to, and flag any answer where authoritative sources disagree
+    (给出你采用的口径与理由)。
+
+  Ground Rules:
+    - Retrieve the actual facts by searching the web — do not answer from memorized knowledge.
+    - State the source for every answer.
+    - Follow 规则 1-5 above; they take priority over any other convention.
+measurable_outputs:
+  - 12 个答案分点（题目一 3 分 + 题目二 3 分 + 题目三 6 分），按题目规定的口径与单位呈现
+  - 每道题的数据来源声明（官方公告 / 官方定价页 / 监管披露 / 新闻机构时间线 + as-of）
+  - 日期口径正确性（写明年份；以事件实际发生日或政策生效日为准）
+  - 精确值口径正确性（使用机构报告/官方定价原文的精确值，而非未经说明的媒体约数）
+  - 数据核验时点声明（2026-07-27）且未纳入其后事件
+rubric_weights: {D1: 60, D2: 12, D3: 8, D4: 0, D5: 0, D6: 20}
+objective_dims: [D1, D2]
+# 权重与 S10 完全一致（D1:60 D2:12 D3:8 D4:0 D5:0 D6:20 = 100），理由同源：
+#   D1=60：本任务为"确定答案"型取数，答对与来源依据即任务本身，故为绝对主导维度。
+#   D6=20：工具链（是否真的用 web search 检索，而非凭训练记忆作答）是 D1 观测不到的失败模式
+#     ——12 个答案可以全对却全靠背诵；消息面任务尤甚（模型对新闻的记忆最不可靠）。
+#   D2=12：口径纪律（日期写明年份 / 以事件发生日为准 / 用官方精确值而非媒体约数 / as-of 时点）
+#     是独立失败模式——答案对但口径未声明。
+#   D3=8：完整性已被 D1 的 12 个分点大幅重复计量，仅保留对"交付结构性缺失"的独立惩罚。
+#   D4=0 / D5=0：取消评分，与 S10 一致。
+# D1 客观 fraction 内部权重: citation 0.3 / grounding 0.7（与 S9/S10 一致）。
+# D1 第二层：本任务【取消】信息来源含金量扣分锚点——见 judge_notes.md D1 段。
+d1_objective_weights: {citation: 0.3, grounding: 0.7}
+# 12 分制的精确还原：13 个 grounding 检查点被重新组装为 12 个等权分点。
+#   每个组恰好对应题库判分规则里的"一分"，组间等权（汇总器对各组通过率取等权平均）。
+#   唯一的两条腿复合分点是 Q1_2（题库唯一带部分分的题）：
+#     all3(vector,tol0) 0.5 + set(set_match,tol1) 0.5 -> 三项全对 1.0 / 恰对两项 0.5 / 其余 0.0
+#   Q2_3（交易金额+持股比例）与 Q3_4（伊斯兰堡会谈两日）都是"全对才给分"，各由单条 vector
+#   检查点实现，故各占一组、组内权重 1.0——不给部分分。
+#   其余 9 个分点各自成组、组内单一检查点权重 1.0。
+grounding_group_weights:
+  Q1_1: {_latest_anthropic_model: 1.0}
+  Q1_2: {_kimi_k3_pricing_all3: 0.5, _kimi_k3_pricing_set: 0.5}
+  Q1_3: {_waic_editions: 1.0}
+  Q2_1: {_acquisition_completion_date: 1.0}
+  Q2_2: {_revenue_commitment_3y: 1.0}
+  Q2_3: {_deal_terms: 1.0}
+  Q3_1: {_epic_fury_order_date: 1.0}
+  Q3_2: {_two_week_ceasefire_date: 1.0}
+  Q3_3: {_strait_reopen_announced_date: 1.0}
+  Q3_4: {_islamabad_talks_window: 1.0}
+  Q3_5: {_mou_signed_date: 1.0}
+  Q3_6: {_truce_declared_over_date: 1.0}
+citation_policy: {mode: sample, k: 5}
+cf_rules: [CF1, CF4, CF5]
+cf_thresholds: {}
+extraction_notes: >
+  提取格式约定（不改变 schema，仅固定书写形式；所有示例均使用与答案无关的占位数值，
+  避免把答案泄漏进提取器上下文）：
+  (1) 日期一律提取为 YYYYMMDD 整数（例如 2026年3月5日 -> 20260305）；作答未写年份但可从上下文
+      确定年份时按 2026 年补全，并在 evidence 中标注原文；完全无法确定年份则记 AMBIGUOUS。
+  (2) Kimi K3 价格一律以"美元 / 100 万 token"提取（题目已明确要求以美元作答）。计价规模换算
+      （每千 token → 每百万 token）允许，因为是纯乘除；【币种换算不做】——作答以人民币等非美元
+      币种给价时记 MISSING 并在 evidence 保留原文（汇率不是确定性换算，提取器不得自行套用汇率）。
+  (3) 金额一律以"亿元"为单位的数值提取（作答写"X 亿元"则记 X）。
+  (4) 股权比例以百分数数值提取（作答写 "X%" 则记 X），不要换算成小数 X/100。
+  (5) 集合型字段（set_match）按其 description 给定的字符串格式书写，不要写成数字。
+  (6) 两日会谈（题目三第4点）提取为一个对象，两个键 talks_start / talks_end 各为 YYYYMMDD 整数；
+      作答只给出单一日期时，该日期记入 talks_start，talks_end 记 MISSING（本点不给部分分，
+      对象不完整即判未通过）。
+  ---
+  【硬约束：以下 6 处格式漂移会让一个本来正确的答案被判未通过，已实测确认，务必照写】
+  (a) 日期必须是 YYYYMMDD 整数，不能写成 "2026-07-14" 这类字符串——提取器验证器只会取出其中
+      第一个数字（得到 2026），从而静默给出错值。诊断特征：报告里该检查点 Δ 达到千万量级。
+  (b) Q1_1_latest_anthropic_model 必须是【字符串列表】（如 ["<系列名> <版本号>"]），不能是裸字符串；
+      且必须去掉 "Claude " 前缀（保留前缀会判未通过）。多余型号不判负，可同时列出原文写法。
+  (c) Q1_2_kimi_k3_pricing_all3 必须是【对象】（三个固定键），不能是数组。
+  (d) Q1_2_kimi_k3_pricing_set 必须是【两位小数字符串的列表】；写成数字或一位小数（如 0.3 / "0.3"）
+      会判未通过。该腿只占该分点 0.5 权重，故漂移的代价上限是 0.5 分。
+  (e) Q2_3_deal_terms 必须同时给出两个键，stake_pct 用百分数数值（写成小数会判未通过）。
+  (f) Q3_4_islamabad_talks_window 必须同时给出 talks_start 与 talks_end 两个键，均为 YYYYMMDD
+      整数（缺一个键即判未通过——本点无部分分）。
+required_inputs:
+  - name: groundtruth_snapshot.json
+    needed_for: "GT 答案键的可读镜像 / 可选 override；默认 GT 为计算器内嵌的冻结答案键"
+    na_policy: "计算器默认使用内嵌答案键, 不依赖此文件；提供 --snapshot 时覆盖内嵌键"
+task_validators:
+  - {name: answer_source_completeness, realized_by: "盲评 D1 关注点 + data_source_per_question (count_min, methodology)"}
+  - {name: date_caliber_correctness, realized_by: "checkpoint caliber_dates_with_year / caliber_event_date_basis（methodology:true）"}
+  - {name: precise_value_discipline, realized_by: "checkpoint caliber_precise_official_values（methodology:true）+ 各数值检查点 tol=0"}
+  - {name: asof_cutoff_declared, realized_by: "checkpoint caliber_asof_cutoff（methodology:true）+ CF4"}
+engine_requirements:
+  calculator: news_search_snapshot
+  gt_kind: calculator
+  gt_version: "1.1"
+  checkpoint_types: [number, vector, set_match, present, count_min]
+  tolerance_policy: >
+    数值/日期检查点默认 tol=0（精确匹配）并显式声明 decimals（日期与届数 decimals:0，金额
+    decimals:2），使 tol=0 在引擎层真正生效——不声明时 grader 会从 repr(GT) 推断精度，
+    repr(12.0)=='12.0' 只有 1 位小数，会引入隐含容差。
+    三个存在多来源口径差异的日期（题目三第 2、5、6 点）按题库容错规则接受相邻两日：
+    GT 取两日中点的半整数、tol=0.5，等价于"落在这两天之内通过、之外不通过"。该编码只在
+    同月内的相邻两日成立（YYYYMMDD 不是线性日刻度），计算器 self_check 会强制校验这一点。
+    vector 检查点 tol=0 为全对才通过（compare_vector 要求每个成员都在容差内），用于题库
+    "全对才给分"的两个分点（题目二第3点、题目三第4点）；
+    set_match 检查点的 tol 计的是"漏掉的成员数"（tol=1 即至少答对三项中的两项）。
+  requires_grader_feature: "compare_scalar 支持 checkpoint 级 decimals（tol=0 精度锚定）；aggregator 支持 grounding_group_weights"
+  data_fetch_mode: "snapshot (frozen answer key from the task's 标准答案 document, embedded in calculator)"
+  min_grader_version: "1.1"
+  min_aggregator_version: "2.3"

@@ -11,3 +11,11 @@ inputs_required:
   - {name: prices.csv,    na_policy: "缺失 -> 指标检查点 NA；仅跑 NAV 复现一致性"}
   - {name: benchmark.csv, na_policy: "缺失 -> ann_excess_return NA"}
   - {name: membership.csv, optional: true}
+fixtures:
+  dir: fixtures
+  files:
+    prices: prices.csv        # 499 tickers × 1699 trading days (2018-01-02 ~ 2024-12-31), 后复权收盘价
+    benchmark: benchmark.csv  # CSI 300 total return, 1473 days (2019-01-01 ~ 2024-12-31)
+    membership: membership.csv # PIT 成分股, 72 个月末 × 300 只/月 (2019-01-31 ~ 2024-12-31)
+  groundtruth: groundtruth.json  # 已计算, self_check.passed=true
+  nav: nav.csv                  # 1456 行每日 NAV 序列

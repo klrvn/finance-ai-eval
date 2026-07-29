@@ -1,0 +1,45 @@
+recipe_id: data_retrieval_snapshot
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/data_retrieval_snapshot.py
+  sidecar: skills/eval-groundtruth/scripts/data_retrieval_snapshot.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}] [--no-live]"
+  produces: [Q1_answer, Q2_answer, Q3_answer, Q4_answer]
+  side_outputs: []
+# v2.4.3: the four answer fields are percentage quantities the calculator emits in
+# percent-magnitude (666.35, -1.33, ...). The extractor canonicalizes any '%'-tagged
+# student value to a FRACTION (666.35% -> 6.6635), so gt_dispatch.apply_percent_canon divides
+# these GT fields by 100 to the same fraction scale — otherwise correct answers fail at tol=0
+# purely on scale.
+# v2.5: Q5_answer (10Y UST yield) removed with the question; it was the one field that had to be
+# listed explicitly here despite checkpoint type `number` — no such field remains.
+percent_fields: [Q1_answer, Q2_answer, Q3_answer, Q4_answer]
+self_check: required        # halts the run if self_check.passed == false
+inputs_required:
+  - {name: groundtruth_snapshot.json, na_policy: "可选(legacy fallback); v2.0起默认从Yahoo Finance实时获取; --no-live时强制需要此文件"}
+fixtures:
+  dir: fixtures
+  files:
+    snapshot: groundtruth_snapshot.json  # legacy v1.0快照(v2.0实时获取失败时的fallback)
+  migration_note: >
+    v2.5: 删除 Q5（10 年期美债收益率）。任务缩减为 4 题(Q1-Q4，全部 YTD 收益率)；计算器移除
+    FRED DGS10 通道与 US 收盘截止逻辑；legacy snapshot fixture 同步删除 Q5 条目。
+    v1.0: snapshot-to-GT calculator reads packed JSON fixture (2026-07-17数据).
+    v2.1: Q3改为价格指数(000300.SS), D4/D5权重=0(D5锚点转移至D2).
+    v2.2: Q1基准价改为IPO发行价(116.20,来自IPO_PRICES注册表)而非上市首日收盘价(131.50).
+    v2.4: 新增 cross-source verification layer — 对 A 股标的(Q2/Q3/Q4)用东方财富 kline API
+    与 Yahoo 对照；先按 as-of+市场收盘逻辑算 expected_latest_date(正确目标日期)，再看
+    Yahoo 取到的 latest_date 是否==expected；若 Yahoo 缺失/延迟(如 000300.SS/518880.SS
+    的某些交易日)则 fallback 到东方财富取 expected_date 值；两源都缺则 ERROR+检查点 NA。
+    provenance.cross_source_check 记录每题裁决(Q2 PASS / Q3 Q4 YAHOO_FALLBACK)。
+    修复了 v2.0 中 Yahoo 对部分 A 股标的数据延迟导致 GT 静默回退到更早日期的 bug。
+    v2.0: 计算器从Yahoo Finance(2513.HK/600519.SS/000300.SS/518880.SS)
+    实时获取最新数据,输出schema不变,容器spec/checkpoint无需改动.
+    数据源:
+    Q1: IPO发行价 116.20 (港交所招股结果公告,硬编码于IPO_PRICES注册表) + Yahoo Finance 2513.HK最新价 — 前复权
+    Q2: Yahoo Finance 600519.SS (贵州茅台) — Adj Close, 前复权; v2.4 cross-verified with 东方财富 1.600519 fqt=1
+    Q3: Yahoo Finance 000300.SS (沪深300价格指数) — Adj Close; v2.4 cross-verified with 东方财富 1.000300 fqt=1, Yahoo缺失时fallback
+    Q4: Yahoo Finance 518880.SS (华安黄金ETF) — Close, 后复权; v2.4 cross-verified with 东方财富 1.518880 fqt=2, Yahoo缺失时fallback
+    市场收盘截止逻辑:
+    HK: 当日为交易日且未过HKT 16:10 → 取上一交易日收盘
+    A股: 当日为交易日且未过CST 15:00 → 取上一交易日收盘

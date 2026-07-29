@@ -49,10 +49,8 @@ description: >
 
 ## 用法
 
-脚本用 `${CLAUDE_PLUGIN_ROOT}` 定位（Bash 展开）；`--schema`/`--normalized`/`--groundtruth`/`--out` 为**用户当前目录**下的运行产物：
-
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-checkpoint-grader/scripts/grade_checkpoints.py" --schema <task_schema.json> \
+python scripts/grade_checkpoints.py --schema <task_schema.json> \
   --normalized run/A/normalized.json --groundtruth run/groundtruth.json --out run/A/det_results.json
 ```
 

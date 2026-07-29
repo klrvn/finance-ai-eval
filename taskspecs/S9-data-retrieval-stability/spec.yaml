@@ -1,0 +1,130 @@
+task_id: S9
+version: 2.5.0
+family: data-retrieval
+tier: T1
+persona: 研究员
+prompt_text: >
+  数据获取稳定性测试 — Information Retrieval Stability Test.
+
+  Your role: Financial data analyst on a research desk.
+  Situation: You need to retrieve and report 4 financial data points as of the latest market close.
+  For each item, retrieve the correct market data and compute the required metric, reporting the
+  exact value with proper methodology (adjustment type, benchmark date, data source).
+
+  --- Questions (4 items) ---
+
+  Q1. 智谱（02513.HK）年初到今天涨了多少？
+    - Report the year-to-date return as a percentage.
+    - Base price: IPO issue price (2026-01-08), because the stock was not listed
+      on the standard year-start date (2025-12-31). 题设规则：若证券在年中才发行，
+      基准价取 IPO 发行价，而非上市首日收盘价。
+    - Latest price: latest available close (as of test date).
+    - Adjustment: 前复权 (forward-adjusted) — 应用于最新价；IPO 发行价本身为
+      上市前确定的固定值，无复权概念。
+    - Formula: (latest - base) / base × 100%.
+
+  Q2. 贵州茅台（600519.SH）今年以来的收益率是多少？
+    - Report the year-to-date return as a percentage.
+    - Base price: 2025-12-31 前复权 close.
+    - Latest price: latest available close (as of test date).
+    - Adjustment: 前复权 (forward-adjusted).
+    - Formula: (latest - base) / base × 100%.
+
+  Q3. 沪深300价格指数（000300.SS）今年到现在的涨跌幅是多少？
+    - Report the year-to-date return as a percentage.
+    - Base: 2025-12-31 index level.
+    - Latest: latest available index level (as of test date).
+    - No adjustment needed (price index, not total return index).
+
+  Q4. 华安黄金ETF（518880.SH）年初至今涨了多少？
+    - Report the year-to-date return as a percentage.
+    - Base price: 2025-12-31 后复权 close.
+    - Latest price: latest available close (as of test date). When no dividend/corporate action
+      occurs on the latest day, the return ratio from actual close equals the backward-adjusted
+      ratio, so actual close can be used directly.
+    - Adjustment: 后复权 (backward-adjusted).
+    - Formula: (latest - base) / base × 100%.
+
+  --- Calculation Conventions ---
+
+  - 年初价: The close of the last trading day of the previous year (2025-12-31).
+    Exception: If a security was not listed on that date (e.g., 智谱 listed 2026-01-08),
+    use the IPO issue price as the base (not the listing-day close).
+  - 最新价: The close of the latest trading day. If today's market has not closed yet,
+    use yesterday's close.
+  - 收益率: (最新价 - 年初价) / 年初价 × 100%, rounded to two decimal places.
+  - 前复权: Adjusts historical prices down so the latest price equals the actual close.
+  - 后复权: Adjusts the latest price up so historical prices equal actual closes.
+  - IPO 发行价: 上市前招股确定的发行价，非上市首日收盘价。对年中上市的新股，
+    基准取 IPO 发行价（来源：交易所招股结果公告/证监会披露）。
+
+  --- Required Deliverables ---
+
+  For each of the 4 questions, report:
+    1. The final answer (a percentage).
+    2. The ticker/identifier used.
+    3. The base price and latest price (or index level) with their dates.
+    4. The adjustment type used (前复权 / 后复权 / 不适用).
+    5. The data source (API name, tool name, or URL with date accessed).
+
+  Ground Rules:
+    - Retrieve actual market data — do not use memorized or approximate values.
+    - State the data source for every quantitative claim.
+    - Use the correct adjustment type as specified per question.
+    - Round the final return percentage to two decimal places.
+
+  --- Quick Reference: Key Parameters ---
+
+  Q1: 02513.HK, 前复权, base=IPO issue price 116.20 (2026-01-08), latest=latest close.
+  Q2: 600519.SH, 前复权, base=2025-12-31 close, latest=latest close.
+  Q3: 000300.SS, no adjustment, base=2025-12-31, latest=latest index level.
+  Q4: 518880.SH, 后复权, base=2025-12-31 close, latest=latest close.
+measurable_outputs:
+  - 4 个数值答案（Q1-Q4 均为收益率百分比），每个答案须标注标的代码、基准价、最新价、复权类型
+  - 每个量化主张的数据来源声明（API/工具名称或带访问日期的 URL）
+  - 复权口径正确性（前复权/后复权/不适用 的选择与题目要求一致）
+  - 基准日正确性（2025-12-31 或上市首日 2026-01-08 的选择）
+rubric_weights: {D1: 40, D2: 20, D3: 15, D4: 0, D5: 0, D6: 25}
+objective_dims: [D1, D2]
+# D4 权重=0（取消评分），其10分转移到D1
+# D5 权重=0（取消评分），其扣分锚点与5分权重转移到D2
+# 权重合计仍为100：D1:40 + D2:20 + D3:15 + D6:25 = 100
+#
+# v2.3 D1 客观锚定细化：
+#   1) D1 objective fraction 内部权重覆盖默认 0.6/0.4 -> 0.3/0.7
+#      （引用核验占比降到 0.3，grounding 检查点通过率提到 0.7）
+#   2) grounding 检查点分组加权：Q1-Q4 每题 base_price:0.4 / latest_price:0.4 / answer:0.2
+#      跨组（4 题）等权平均 → grounding_pass_fraction_weighted
+#      示例：Q1 base PASS / latest FAIL / answer FAIL → Q1 加权通过率 = 0.4*1 + 0.4*0 + 0.2*0 = 0.40 = 40%
+#
+# v2.5 删除 Q5（10 年期美债收益率）：本任务由 5 题缩减为 4 题（Q1-Q4，全部为 YTD 收益率）。
+#   D1/D2/D3/D6 权重不变（40/20/15/25，合计仍为 100）；grounding 跨组平均由 5 组变为 4 组；
+#   citation_policy.k 由 5 降为 4（本任务每题一条承重来源，k 跟随题数）；
+#   计算器移除 FRED DGS10 通道与 US 收盘截止逻辑。
+d1_objective_weights: {citation: 0.3, grounding: 0.7}
+grounding_group_weights:
+  Q1_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
+  Q2_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
+  Q3_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
+  Q4_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
+citation_policy: {mode: sample, k: 4}
+cf_rules: [CF1, CF4, CF5]
+cf_thresholds: {}
+required_inputs:
+  - name: groundtruth_snapshot.json
+    needed_for: "可选(legacy fallback); v2.0起默认从Yahoo Finance实时获取GT; --no-live时强制需要"
+    na_policy: "v2.0 live模式: 不需要此文件; --no-live模式: 缺失 -> 所有数值检查点 NA"
+task_validators:
+  - {name: data_source_completeness, realized_by: "盲评 D1 关注点：每条量化主张是否标注数据来源且可溯源"}
+  - {name: adjustment_type_correctness, realized_by: "checkpoint 各题复权类型字段（methodology:true）"}
+  - {name: base_date_correctness, realized_by: "checkpoint 各题基准日选择正确性（methodology:true）"}
+engine_requirements:
+  calculator: data_retrieval_snapshot
+  gt_kind: calculator
+  gt_version: "2.5"
+  checkpoint_types: [pct, number, present, count_min]
+  tolerance_policy: "所有数值检查点 tol=0（精确匹配，完全正确才得分）"
+  data_fetch_mode: "live_api (Yahoo Finance + East Money cross-source check)"
+  cross_source_verification: "v2.4 新增：对 A 股标的(Q2/Q3/Q4)用东方财富 kline API 与 Yahoo 对照；先按 as-of+市场收盘逻辑算 expected_latest_date，Yahoo 缺失/延迟时 fallback 到东方财富取 expected_date 值；两源都缺则 ERROR+检查点 NA。provenance.cross_source_check 记录每题裁决。"
+  min_grader_version: "1.0"
+  min_aggregator_version: "2.3"

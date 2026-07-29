@@ -13,7 +13,7 @@ measurable_outputs:
   - 跨公司 ROE 驱动因素差异分析（谁靠利润率、谁靠周转、谁靠杠杆）
   - 每家公司的核心竞争力来源判断，以及盈利质量差异讨论
   - 所用财务数据（营收/净利/总资产/净资产）注明来源与报告期
-rubric_weights: {D1: 20, D2: 25, D3: 15, D4: 25, D5: 5, D6: 10}
+rubric_weights: {D1: 20, D2: 20, D3: 15, D4: 20, D5: 5, D6: 20}
 objective_dims: [D2]
 citation_policy: {mode: sample, k: 5}
 cf_rules: [CF1, CF2, CF3, CF5]

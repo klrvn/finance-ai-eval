@@ -1,0 +1,41 @@
+# S7 候选基金池（30 只，按规模降序）
+# 数据来源：westock-tool ranking size --asset etf（腾讯自选股）
+# 截至日期：2026-07-10
+# 筛选口径：沪深权益类 ETF，排除货币/债券/黄金/商品型
+# 候选池仅含 ETF（主动管理型基金暂不纳入，因其 NAV 数据结构不一致）
+
+as_of_date: "2026-07-10"
+pool_size: 30
+selection_criteria: "沪深权益类 ETF，按总规模降序取前 30 只"
+
+funds:
+  - {code: "sh510300", name: "沪深300ETF华泰柏瑞",   aum_yi: 2000.9}
+  - {code: "sh510310", name: "沪深300ETF易方达",     aum_yi: 1374.3}
+  - {code: "sz159919", name: "沪深300ETF嘉实",       aum_yi: 930.8}
+  - {code: "sh510330", name: "沪深300ETF华夏",       aum_yi: 903.3}
+  - {code: "sh510500", name: "中证500ETF南方",       aum_yi: 728.3}
+  - {code: "sh588000", name: "科创50ETF华夏",        aum_yi: 687.0}
+  - {code: "sh510050", name: "上证50ETF华夏",        aum_yi: 667.5}
+  - {code: "sz159792", name: "港股通互联网ETF富国",   aum_yi: 644.3}
+  - {code: "sh512880", name: "证券ETF国泰",          aum_yi: 516.7}
+  - {code: "sz159915", name: "创业板ETF易方达",      aum_yi: 512.7}
+  - {code: "sh513180", name: "恒生科技ETF华夏",      aum_yi: 500.8}
+  - {code: "sh513130", name: "恒生科技ETF华泰柏瑞",  aum_yi: 479.9}
+  - {code: "sh513050", name: "中概互联网ETF易方达",  aum_yi: 401.4}
+  - {code: "sh588200", name: "科创芯片ETF嘉实",      aum_yi: 386.7}
+  - {code: "sh563360", name: "A500ETF华泰柏瑞",      aum_yi: 382.5}
+  - {code: "sh588080", name: "科创50ETF易方达",      aum_yi: 373.3}
+  - {code: "sz159352", name: "A500ETF南方",          aum_yi: 366.2}
+  - {code: "sh512000", name: "券商ETF华宝",          aum_yi: 350.6}
+  - {code: "sh513330", name: "恒生互联网ETF华夏",    aum_yi: 335.0}
+  - {code: "sh512890", name: "红利低波ETF华泰柏瑞",  aum_yi: 312.1}
+  - {code: "sz159326", name: "电网设备ETF华夏",      aum_yi: 303.8}
+  - {code: "sh513010", name: "恒生科技ETF易方达",    aum_yi: 298.9}
+  - {code: "sz159636", name: "港股通科技30ETF工银",  aum_yi: 298.3}
+  - {code: "sh513750", name: "港股通非银ETF广发",    aum_yi: 298.3}
+  - {code: "sz159338", name: "中证A500ETF国泰",      aum_yi: 291.6}
+  - {code: "sh512170", name: "医疗ETF华宝",          aum_yi: 280.9}
+  - {code: "sh512400", name: "有色金属ETF南方",      aum_yi: 277.2}
+  - {code: "sz159941", name: "纳指ETF广发",          aum_yi: 276.5}
+  - {code: "sz159870", name: "化工ETF鹏华",          aum_yi: 269.7}
+  - {code: "sh512050", name: "A500ETF华夏",          aum_yi: 261.5}

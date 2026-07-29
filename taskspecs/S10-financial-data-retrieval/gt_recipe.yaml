@@ -1,0 +1,61 @@
+recipe_id: financial_data_snapshot
+kind: calculator
+calculator:
+  script: skills/eval-groundtruth/scripts/financial_data_snapshot.py
+  sidecar: skills/eval-groundtruth/scripts/financial_data_snapshot.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    - ZTE_2023_net_profit
+    - ZTE_2023_roe
+    - ZTE_2023_inventory
+    - ZTE_2024_net_profit
+    - ZTE_2024_roe
+    - ZTE_2024_inventory
+    - ZTE_2025_net_profit
+    - ZTE_2025_roe
+    - ZTE_2025_inventory
+    - POPMART_2023_net_profit
+    - POPMART_2023_roe
+    - POPMART_2023_inventory
+    - POPMART_2024_net_profit
+    - POPMART_2024_roe
+    - POPMART_2024_inventory
+    - POPMART_2025_net_profit
+    - POPMART_2025_roe
+    - POPMART_2025_inventory
+    - NVDA_2023_net_profit
+    - NVDA_2023_roe
+    - NVDA_2023_inventory
+    - NVDA_2024_net_profit
+    - NVDA_2024_roe
+    - NVDA_2024_inventory
+    - NVDA_2025_net_profit
+    - NVDA_2025_roe
+    - NVDA_2025_inventory
+  side_outputs: []
+# v1.0.1: 9 个 ROE 字段是百分比量, 计算器以 percent-magnitude 输出 (15.19, 119.18...)。
+# 提取器会把带 '%' 的作答值规范化为 FRACTION (15.19% -> 0.1519), 因此
+# gt_dispatch.apply_percent_canon 将这些 GT 字段同样除以 100 对齐到 fraction 口径——
+# 否则正确答案会在 tol=0 下纯因量纲不一致而失败 (实测 grounding 0.667, 9 个 ROE 全部 CF5)。
+# 与 S9 v2.4.3 同一处理。net_profit/inventory 为金额(亿元/亿美元), 不参与此换算。
+percent_fields: [ZTE_2023_roe, ZTE_2024_roe, ZTE_2025_roe,
+                 POPMART_2023_roe, POPMART_2024_roe, POPMART_2025_roe,
+                 NVDA_2023_roe, NVDA_2024_roe, NVDA_2025_roe]
+self_check: required        # halts the run if self_check.passed == false
+inputs_required:
+  - name: groundtruth_snapshot.json
+    na_policy: "可选(override); 默认 GT 为计算器内嵌的冻结答案键, 不需要此文件; 提供 --snapshot 时覆盖内嵌键"
+fixtures:
+  dir: fixtures
+  files:
+    snapshot: groundtruth_snapshot.json   # 内嵌答案键的可读镜像 / 可选 override
+  migration_note: >
+    v1.0: snapshot-to-GT calculator. GT 为来自公司财报的冻结答案键（净利润=归母, ROE=加权,
+    存货=期末余额）, 三个指标是确定的已报告值——无需实时抓取。计算器 financial_data_snapshot.py
+    内嵌答案键并展开为 27 个 {COMPANY_FY_METRIC} 检查点值, 输出结构化 self_check（完整性 + 数值合理性）。
+    fixtures/groundtruth_snapshot.json 为答案键的可读镜像, 也可作为 --snapshot override 传入
+    (同样的嵌套结构)。数据截止日 2026-07-20。
+    口径: net_profit=归属母公司股东的净利润; roe=加权净资产收益率; inventory=存货期末余额。
+    四舍五入: net_profit/inventory 2 位小数; roe 百分比后 2 位小数。
+    公司: 中兴通讯 000063.SZ (CNY 亿元) / 泡泡玛特 09992.HK (CNY 亿元) /
+          英伟达 NVDA.O (USD 亿美元, 财年1月末结束)。

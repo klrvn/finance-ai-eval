@@ -1,0 +1,95 @@
+{
+  "task_id": "S11",
+  "version": "1.1.0",
+  "origin": "legacy-v1",
+  "authored_by": "eval-judge container-authoring, from user-provided question set (S11_web_search.md) and definite answer key with scoring rules (S11_GT.md)",
+  "origin_note": "New authored container (not a v1 migration). origin is tagged 'legacy-v1' to satisfy the spec-lint governance gate, which currently only accepts that value; true authorship is recorded here.",
+  "method_evidence": "Financial news-flow (消息面) web-search retrieval with definite answers: 12 scoreable points across three 题目 — AI 新闻 (最新 Anthropic 模型 / Kimi K3 官方 API 三档价格, 以美元作答 / WAIC 届数, 3 分), 黑芝麻智能收购亿智电子 (公告完成日 / 三年累计含税营收承诺下限 / 交易金额+持股比例, 3 分), 2026 霍尔木兹海峡危机时间线 (6 个事件, 6 分). Tests whether the candidate actually searches the web for time-sensitive facts rather than answering from training memory, and whether it holds the task's caliber rules (日期写明年份, 以事件实际发生日/生效日为准, 用官方精确值而非媒体约数, as-of 2026-07-27). GT is a FROZEN answer key from the task's 标准答案 document, embedded in news_search_snapshot.py (network-free snapshot calculator), mirrored for readability in fixtures/groundtruth_snapshot.json.",
+  "source_files": {
+    "questions": "C:/Users/RBLU/Documents/alphamind-eval-skills/tasks/S11_web_search.md",
+    "answers": "C:/Users/RBLU/Documents/alphamind-eval-skills/tasks/S11_GT.md",
+    "revision_read": "2026-07-28 (revised question set + answer key)"
+  },
+  "engine_versions": {
+    "grader": "1.1 (checkpoint-level `decimals` support)",
+    "aggregator": "2.3 (grounding_group_weights support)",
+    "extractor": "1.0",
+    "calculator": "news_search_snapshot.py v1.1 (snapshot, embedded answer key)"
+  },
+  "review_status": "frozen",
+  "container_hash": "0ba399d7f5f03f73",
+  "data_provisioned": {
+    "mode": "snapshot",
+    "gt_kind": "calculator",
+    "calculator": "news_search_snapshot.py v1.1 (embedded frozen answer key)",
+    "data_cutoff": "2026-07-27",
+    "encoding": {
+      "dates": "YYYYMMDD integer",
+      "tolerant_dates": "half-integer midpoint + tol 0.5 == exactly the two dates the 题库 accepts (题目三 第2、第5、第6 点)",
+      "two_day_window": "题目三 第4点 (伊斯兰堡会谈) = vector of two consecutive YYYYMMDD days, tol=0 -> both days required, NO partial credit",
+      "prices": "USD per 1M token (题目已明确要求以美元作答)",
+      "amounts": "亿元 (CNY)",
+      "stake_pct": "percent magnitude (not a fraction); intentionally NOT percent-canonicalized because it is a vector member"
+    },
+    "self_check": "verifies all 13 checkpoints present with the shape their type requires; dates are real YYYYMMDD calendar days inside the task window; the three tolerant dates are exact half-integer midpoints bracketing two same-month days; the two-day talks window is genuinely two consecutive days; the Q1_2 split legs are both present and its vector and set legs describe the same three prices"
+  },
+  "point_scheme": {
+    "total_points": 12,
+    "by_question": {
+      "题目一 AI 新闻": 3,
+      "题目二 收购交易": 3,
+      "题目三 海峡时间线": 6
+    },
+    "realization": "13 grounding checkpoints re-assembled into 12 equally-weighted points by spec.grounding_group_weights; 11 points are single checkpoints (weight 1.0), 1 point is a two-leg composite (0.5/0.5)",
+    "composite_points": {
+      "Q1_2": "all3 (vector, tol=0) 0.5 + set (set_match, tol=1) 0.5 -> 1.0 / 0.5 / 0.0 for 3/2/<=1 correct prices. This is the ONLY partial-credit point in the bank.",
+      "Q2_3": "single vector checkpoint over {deal_amount_yi_cny, stake_pct}, tol=0 -> all-or-nothing, matching 题库 '第三题全对才给分'",
+      "Q3_4": "single vector checkpoint over {talks_start, talks_end}, tol=0 -> all-or-nothing over the two 伊斯兰堡会谈 days, per the owner's 2026-07-28 decision (no partial credit)"
+    },
+    "tolerant_dates": "题目三 第2、第5、第6 点 each accept either of two adjacent days (半整数中点 + tol 0.5); 第1、3、4 点 are exact (tol=0)"
+  },
+  "deviations_from_family": {
+    "d1_layer2_cancelled": "Per user direction, S11 cancels the data-retrieval family's D1 Layer-2 信息来源含金量 (three-tier source-pedigree) 扣分锚点 entirely — judges register zero deductions in D1, so D1 = Layer-1 measured baseline only. Rationale recorded in judge_notes.md D1: a news web-search task's available sources are inherently a mix of news-agency timelines, official pricing pages, exchange filings and encyclopaedia entries (the answer key itself concedes ±1-day divergence across AP / Britannica / UK Parliament Library / ABC News and grants tolerance for it), so applying a pedigree ladder built for company filings would penalize the very behaviour the task asks for. Source quality remains constrained through other lanes without double counting: citation lane inside Layer 1 (0.3), D6 toolchain (20), D2 Layer-2 as-of/reproducibility anchors, CF1 fabrication and CF4 staleness.",
+    "answer_checkpoints_not_methodology_tagged": "Unlike S10 (where all 27 numeric checkpoints carried methodology:true), S11's 13 answer checkpoints are grounding-only. D2's Layer-1 basis is the 4 caliber `present` checkpoints plus data_source_per_question. Rationale: '答对' and '口径纪律' are independent failure modes here (a date can be right but written without a year; a price right but without currency/unit), so keeping them separate stops D2 from being a restatement of D1."
+  },
+  "validation": {
+    "spec_lint": "PASS, 0 errors 0 warnings (11 containers linted, 0 errors overall), from both the source repo and the installed plugin cache",
+    "gt_self_check": "passed 13/13, both from the embedded key and via --snapshot fixtures/groundtruth_snapshot.json (override round-trips identically)",
+    "point_scheme_suite": "12 cases driven through the real chain (validators.py -> grade_checkpoints.py -> aggregate._grouped_grounding_fraction) reproduce the revised 题库 judging rules EXACTLY: perfect 12/12; the later accepted day on all three tolerant dates 12/12; Kimi 2-of-3 11.5/12; Kimi 1-of-3 11/12; 伊斯兰堡会谈 with only the start day 11/12 and with the end day off by one 11/12 (all-or-nothing, no partial credit); Q2_3 stake wrong 11/12; 第2点 and 第5点 one day outside their windows 11/12; 第1点 and 第3点 (no tolerance) off by one 11/12; wrong model name 11/12. Consistency asserts also enforce that grounding_group_weights has exactly 12 groups and that its coverage == the grounding checkpoint set == gt_recipe.produces. Full aggregator pass on a perfect work with a clean citation lane and empty judge ledgers scores 100/100 with D1 fraction 1.0.",
+    "precision_probe": "tol=0 + declared decimals verified live: answers at higher precision still PASS (0.300 -> 0.30; 12.004 -> 12.00) while off-by-0.01 FAILS — i.e. no silent tolerance leaked in through repr() inference.",
+    "isolation_probe": "a failed caliber checkpoint moves only methodology_pass_fraction and leaves grounding untouched, and vice versa — D1 and D2 Layer-1 bases are genuinely independent.",
+    "conformance_test": "tests/point_scheme_test.py — re-runnable in-container proof (14 cases through gt_dispatch -> validators.py -> grade_checkpoints.py -> aggregate._grouped_grounding_fraction) that the 判分规则 are reproduced exactly, plus structural asserts (12 groups, each summing to 1, coverage == grounding checkpoints == gt_recipe.produces). Not part of the container contract, so it cannot change container_hash. Run: python taskspecs/S11-news-data-retrieval/tests/point_scheme_test.py"
+  },
+  "source_doc_inconsistencies_2026_07_28": {
+    "why_recorded": "Tracked across three source revisions on 2026-07-28. Every item raised by the audits has now been closed in the source documents; the entries below are kept as the record of what was changed and why, so a future re-derivation of this container does not reopen them.",
+    "RESOLVED_题目三_preamble": "问题集 now says 请写出下列六项 (was 七项). Matches spec.prompt_text.",
+    "RESOLVED_题目三_total": "3.2 now says 本题满分六分 (was 七分), confirming the 12-point bank the container implements.",
+    "RESOLVED_部分正确_bullet": "The orphaned 部分正确得0.5分 bullet has been removed from 3.2. 题目三 now carries no partial-credit rule at all, which is what makes the two-day 伊斯兰堡会谈 item all-or-nothing — the owner's 2026-07-28 decision is now backed by the document text rather than resting on a judgment call. The only partial-credit rule left in the bank is 题目一第二题 (答对两问得0.5分).",
+    "RESOLVED_gt_section_heading": "The answer key's section-2 heading now reads 黑芝麻智能收购亿智电子 (was missing 能).",
+    "RESOLVED_q3_1_wording": "The key's row-1 event column now names the Epic Fury order directly, matching the question. The earlier mismatch (it described 美以开始对伊朗实施军事打击) is closed at source; the owner had already confirmed the two fall on the same day.",
+    "NOTE_tolerance_now_table_only": "The second revision removed 3.2's explicit no-tolerance list (第1、3、4点：仅接受标准答案，无容错). Tolerance is therefore now defined solely by the 可接受答案 column of the 3.1 table (— means exact). The container matches that reading: #2/#5/#6 accept either of two adjacent days, #1/#3/#4 are exact. Worth keeping that column authoritative and consistent, since no prose backstop remains.",
+    "NOTE_每个事件日期单独计分_wording": "3.2 opens with 每个事件日期单独计分 immediately before 每对一题的一分，本题满分六分. Read as 'each event's date is scored independently' this is consistent with six one-point questions, so it was left alone; read as 'each individual date scores' it would imply seven points for the two-day 第4点. 满分六分 is operative and is what the container implements. 每题单独计分 would remove the ambiguity if a human grader ever works from this document directly.",
+    "RESOLVED_section_header": "题目三's section header read （7分）while 3.2 in the same section said 本题满分六分 — a direct self-contradiction. Corrected by the owner to （6分）, matching the 12-point bank the container implements.",
+    "RESOLVED_第5点_tolerance_documented": "第5点 (签署谅解备忘录) carried an 可接受答案 of 2026年6月18日 in the 3.1 table with no supporting rule in 3.2 and no mention in 3.3. Documented 2026-07-28: 3.2 gained a 第5点 bullet stating that both 6月17日 and 6月18日 are判为正确, 3.3's opening now reads 第2、5、6点 (was 第2、6点), and 3.3 gained a 第5点 paragraph attributing the divergence to its two general causes (timezone, or 签署日 vs 正式公布日). The per-outlet attribution that 第2点 and 第6点 carry is explicitly marked 待补 rather than invented — naming specific news organisations without having verified them would be exactly the fabrication the framework's CF1 rule exists to catch. Until it is filled in, 3.1's 可接受答案 column governs. Container behaviour is unaffected either way: Q3_5 already accepts both days."
+  },
+  "post_freeze_audit_2026_07_28": {
+    "verdict": "Container verified frozen and fully wired: registry status frozen, spec_lint PASS with 0 warnings from both the source repo and the installed plugin cache (byte-identical), the /eval-judge pipeline's own steps 5-7 (YAML->JSON conversion, gt_dispatch --root <plugin>) consume it cleanly, taskspec.json carries all grounding_group_weights groups and d1_objective_weights, and GT value keys == the grounding checkpoints exactly.",
+    "plugin_surface_sync": "The audit also found that nine plugin-level discovery/routing surfaces still advertised the registered range as S1-S9 — stale since S10, not just S11 — including the /eval-judge command description, agents/eval-judge.md's instruction 你只评测…（当前为 S1–S9）, eval-orchestrator's intake step, and .claude-plugin/marketplace.json. All were bumped to S1-S11, and eval-groundtruth/SKILL.md's recipe table (which was missing BOTH financial_data_snapshot and news_search_snapshot) now lists them with its counts corrected.",
+    "citation_lane_dependency": "D1 = 0.3*verified_fraction + 0.7*grounding, and the aggregator DROPS the citation weight entirely (returning grounding alone) whenever citation_audit.json is absent or its verified_fraction is null. Measured on this container: a work answering every point correctly but citing nothing scores D1 0.70 when the lane reports verified_fraction 0.0, but a full 1.00 when it reports null. Because S11 cancels the D1 Layer-2 anchors, that fallback is the only thing standing between a source-free work and full D1 marks. Owner decision 2026-07-28: pin the contract rather than add CF2 — skills/eval-citation-verifier/SKILL.md now REQUIRES a numeric verified_fraction (0.0 for a zero-citation work) whenever citation_policy.mode != none. cf_rules stay [CF1, CF4, CF5]. Residual: the aggregator's fallback itself is unchanged, so a verifier that violates the contract still silently restores full D1.",
+    "hedged_answers": "set_match ignores EXTRA members, so naming the right model alongside other current models still passes Q1_1 at the checkpoint level. This is deliberate: hedging is priced in D3 via the 骑墙式作答 anchor (−0.5/项) rather than by failing a retrieval checkpoint.",
+    "d1_layer2_enforcement_is_prose": "The D1 Layer-2 cancellation is declared in judge_notes.md; the aggregator has no container switch for it and will subtract any D1 deduction a judge logs anyway. If a blind judge ignores the note, D1 drops below its measured baseline. Mechanical enforcement would need an engine-level flag."
+  },
+  "known_extractor_format_sensitivities": {
+    "why_recorded": "The engine compares by shape and, for set_match, by string identity. Probed live with validators.py in the loop (the same class of defect that produced S9 v2.4.3 and S10 v1.0.1). Each item below can score a CORRECT answer down purely on extraction format, so they are pinned in spec.extraction_notes 硬约束 (a)-(f) and worth spot-checking in normalized.json on a real run.",
+    "dates_as_iso_string": "'2026-07-14' -> validators' first-number regex yields 2026.0 -> checkpoint FAILS silently. Cost 1 point. Diagnostic signature: the report shows a delta in the tens of millions for that checkpoint.",
+    "model_name_prefix_or_shape": "Keeping the 'Claude ' prefix, or emitting a bare string instead of a list, FAILS the set_match. Cost 1 point. Extra models listed alongside the right one do NOT fail (compare_set ignores extras); casing and padding are normalized.",
+    "pricing_set_leg_string_format": "Q1_2_kimi_k3_pricing_set is matched by string identity, so numbers or 1-dp strings ('0.3') FAIL while '0.30' passes. Cost is bounded at 0.5 point because this leg carries only half of that point; the other half is the float vector leg, which is representation-robust.",
+    "vector_shape_and_stake_scale": "Q1_2 pricing as an array instead of an object, a missing deal_terms or talks-window key, or stake_pct written as a fraction all FAIL. Vector KEY casing is normalized, so key case is safe. Note the talks-window vector's members are dates, so hazard (a) applies inside it too — they must be YYYYMMDD integers, not ISO strings.",
+    "not_applicable": "Numeric scalar checkpoints are robust: trailing zeros, int-vs-float, and higher precision all round-trip correctly through validators + the decimals-anchored comparison."
+  },
+  "changelog": {
+    "1.1.0": "Tracks the revised question set + answer key (read 2026-07-28). 题目三 restructured from seven items to six: REMOVED the old 第4点 (巴总理宣布美伊敲定 MOU、美国随后解除海上封锁) and the old 第6点 (三艘船只遭袭的两日区间); ADDED a new 第4点 (美伊伊斯兰堡会谈的两日日期) as an all-or-nothing two-day vector per the owner's decision; 第5点 (签署谅解备忘录) GAINED a ±1-day tolerance it did not previously have; the old 第7点 (宣布休战结束) became 第6点 with unchanged values. Bank total moves 13 -> 12 and the Kimi pricing item is now the only partial-credit point. Also: 题目一第2题 now states 以美元作答 in the prompt, so the USD-only extraction rule is backed by the question text itself; prompt_text adopts the corrected 黑芝麻智能 spelling and now matches the question set verbatim. Checkpoints 15 -> 13, groups 13 -> 12. Calculator bumped to v1.1 with a self-check that additionally verifies the talks window is two consecutive days. Finalised 2026-07-28 after the source documents were corrected (题目三 header -> （6分）, 第5点 容错 documented in 3.2/3.3): Q3_5's checkpoint description now mirrors the wording used for 第2点/第6点 instead of pointing at the table as the sole authority. Description-only change — the 14-case conformance test is unaffected.",
+    "1.0.0": "Initial container. Weights identical to S10 (D1:60 D2:12 D3:8 D4:0 D5:0 D6:20). D1 Layer 1 = 0.3*citation + 0.7*grounding (same as S9/S10). D1 Layer 2 cancelled per user direction. 13-point scheme realized via grounding_group_weights over 15 checkpoints. Post-freeze audit clarification: the Kimi-pricing extraction contract forbids CURRENCY conversion outright (scale conversion per-1K->per-1M stays allowed) — the previous wording could invite the extractor to apply a remembered FX rate, which is not a deterministic conversion; a non-USD answer is recorded MISSING with the original in evidence, failing as the caliber miss it is."
+  },
+  "notes": "Family: news-data-retrieval (sibling in spirit to S9/S10 data-retrieval). Tier T1 (objective_dims [D1,D2] + executable calculator). CF: CF1+CF4+CF5. Citation: sample,k=5. D1 objective weights: {citation:0.3, grounding:0.7}. Scoring: binary pass/fail + CF5; tol=0 with explicit `decimals` on every exact checkpoint, tol=0.5 half-integer midpoints on the three tolerant dates. 13 grounding checkpoints + 4 caliber present checkpoints (methodology) + 1 data_source_per_question (count_min, methodology). GT: frozen answer key from the task's 标准答案 document, embedded in news_search_snapshot.py; fixtures/groundtruth_snapshot.json is a readable mirror / optional --snapshot override."
+}

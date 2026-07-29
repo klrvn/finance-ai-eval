@@ -1,9 +1,11 @@
 # 提取为抽样单元格列表 [{fund, metric, value}]；与 groundtruth.values.funds[fund][metric] 比对，
 # 任一超容差即 fail（并作为 CF5）。无权威指标时记 NA。
+# 候选池成员身份：作品所选 5 只基金代码必须全部出现在 candidate_pool.yaml 中。
 fields:
   shortlist_count:        {type: count_eq, target: 5}
+  shortlist_from_pool:    {type: set_match, note: "all 5 selected fund codes must appear in candidate_pool.yaml"}
   table_columns_complete: {type: present, note: "all 8 columns present for all 5 rows"}
   metric_cells_verified:  {type: sample_verify, tol: 0.005, rel: true, grounding: true, methodology: true,
-                          note: "sampled cells vs supplied fund metrics"}
-  single_as_of_date:      {type: present}
+                          note: "sampled cells vs supplied fund metrics (as-of 2026-07-10)"}
+  as_of_date_correct:     {type: present, note: "submission must state as-of date = 2026-07-10"}
   ranking_present:        {type: present}

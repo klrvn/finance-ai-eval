@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "eval-judge-marketplace",
+  "owner": {
+    "name": "AlphaMind"
+  },
+  "plugins": [
+    {
+      "name": "eval-judge",
+      "source": "./",
+      "description": "Financial-analysis evaluation orchestrator (评审法官). Full-pipeline absolute grading for registered frozen tasks (see taskspecs/registry.json, currently S1-S11): extraction, deterministic ground truth, checkpoint grading, citation verification, blind rubric scoring (dispatched to an isolated subagent), CF audit, and a unified scorecard."
+    }
+  ]
+}

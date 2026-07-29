@@ -1,32 +1,160 @@
 task_id: S2
-version: 1.0.0
+version: 1.2.0
 family: quant-backtest
 tier: T1
 persona: 量化研究员
 prompt_text: >
-  Backtest a monthly-rebalanced, long-only strategy on the constituents of CSI 300 that each month holds
-  an equal-weighted basket of the top quintile by 12-month-minus-1-month price momentum. Period
-  2019-01-01 to 2024-12-31, benchmark CSI 300 total return, commission 0.10%, slippage 0.10%. Report
-  annualized return, annualized volatility, Sharpe ratio, max drawdown, annualized excess return vs
-  benchmark, and average monthly turnover. Provide the cumulative-return curve, the drawdown chart, and
-  export the daily NAV series.
+  Quantitative Strategy Backtest — Unambiguous Specification.
+
+  Your role: Quantitative researcher on a systematic strategies desk.
+  Situation: The team is screening simple factor strategies. You have been asked to implement and backtest
+  one candidate and report its historical risk/return profile against a benchmark.
+
+  --- Strategy Specification ---
+
+  1.1 Universe: Constituents of the CSI 300 index, using point-in-time (PIT) historical membership.
+    At each rebalance date, the investable universe is limited to the stocks that were actual
+    constituents of the CSI 300 index on that specific rebalance date. Do NOT use the current or latest
+    CSI 300 constituents and apply them retroactively across the full backtest period (survivorship bias).
+    In practice: Obtain the CSI 300 constituent list for each rebalance date independently.
+
+  1.2 Signal: 12-Month-Minus-1-Month Price Momentum, defined using trading-day offsets from the
+    rebalance date: signal(t) = P[t - 21] / P[t - 252] - 1, where t is the rebalance date (a trading day),
+    P[t - 21] is the adjusted closing price approximately 1 month ago (21 trading days before t),
+    P[t - 252] is the adjusted closing price approximately 12 months ago (252 trading days before t).
+    The most recent month (21 trading days immediately before t) is deliberately skipped to avoid
+    short-term reversal effects. Annualization convention: 252 trading days per year, 21 trading days
+    per month. Important: Use trading-day offsets (iloc position), NOT calendar-month offsets.
+
+  1.3 Portfolio Construction:
+    Selection: At each rebalance, rank all eligible stocks by the momentum signal in descending order.
+    Select the top quintile (top 20%) by signal value (use signal >= signal.quantile(0.8)).
+    Weighting: Equal-weighted among the selected stocks. Each selected stock receives weight = 1/n_selected.
+    Direction: Long-only. No short positions.
+
+  1.4 Rebalance Schedule: Monthly, at the last trading day of each calendar month.
+    Determine the last trading day of each month during the backtest period.
+    Compute the momentum signal and target weights using prices as of that last trading day's close.
+    Execute the rebalance trades at the close of the last trading day, so the new weights take effect
+    from the next trading day. Do NOT rebalance on the first trading day of the month.
+
+  1.5 Backtest Period: 2019-01-02 to 2024-12-31. The first trading day is 2019-01-02; the final trading
+    day is 2024-12-31. The backtest begins with NAV = 1.0 on 2019-01-02. The initial rebalance (first
+    portfolio construction) occurs on the last trading day of January 2019, using signal data computed
+    from the price history leading up to that date.
+
+  1.6 Benchmark: CSI 300 Total Return Index (H00300.CSI). Use the total return (全收益) version, NOT the
+    price return (价格) version. The total return index includes dividend reinvestment.
+
+  1.7 Costs: Commission: 0.10% (0.001) and Slippage: 0.10% (0.001), applied via NAV deduction at each
+    rebalance. At each rebalance, compute the two-sided turnover: turnover = Σ |new_weight[i] -
+    old_weight[i]| (sum over all stocks). Then deduct costs from the NAV:
+    NAV = NAV × (1 - turnover × (commission_rate + slippage_rate)) = NAV × (1 - turnover × 0.002).
+    The cost deduction happens before applying that day's market returns. The turnover calculation
+    includes all weight changes, including those from the initial build (where old_weight = 0 for all).
+    Do NOT attempt to apply costs at the individual trade level or let the backtest engine handle them —
+    use the explicit NAV-level deduction formula above.
+
+  --- Implementation Conventions ---
+
+  2.1 Data Requirements:
+    Price data: Adjusted close prices (后复权) for all stocks, starting from at least 2018-01-02 (to allow
+    252-trading-day lookback for the first signal computation in late January 2019).
+    Benchmark data: CSI 300 Total Return Index (H00300.CSI) daily levels from 2019-01-02 to 2024-12-31.
+    Membership data: Point-in-time CSI 300 constituent lists for each month-end during the backtest
+    period (2019-01-31 through 2024-12-31).
+
+  2.2 Annualization Conventions:
+    Trading days per year: 252. Risk-free rate: 0% (for Sharpe ratio calculation).
+    All annualization uses simple geometric scaling:
+    Annualized return: (NAV_end / NAV_start)^(252 / n_trading_days) - 1
+    Annualized volatility: std(daily_returns) × sqrt(252)
+    Sharpe ratio: (mean(daily_returns) × 252) / (std(daily_returns) × sqrt(252))
+
+  2.3 Stock Filters (before computing signals and selecting stocks at each rebalance):
+    Exclude stocks that are suspended from trading (停牌) on the rebalance date.
+    Exclude stocks that are ST (Special Treatment) or *ST on the rebalance date.
+    Exclude stocks that have hit their daily price limit (涨跌停) on the rebalance date.
+    Exclude stocks with insufficient price history for signal computation (fewer than 252 trading days of
+    data before the rebalance date).
+
+  2.4 NAV Walkthrough (Daily NAV Evolution): For each trading day d in sequence:
+    If d is a rebalance date: (a) Compute the new target weights new_w (equal-weight among top-quintile
+    stocks by momentum signal, using PIT constituents). (b) Calculate turnover: turnover = Σ|new_w[i] -
+    cur_w[i]| (two-sided). (c) Apply cost: NAV = NAV × (1 - turnover × 0.002). (d) Set cur_w = new_w.
+    Then apply market returns: daily_return = Σ(cur_w[i] × stock_return[d][i]).
+    Update NAV: NAV = NAV × (1 + daily_return).
+
+  2.5 Turnover Calculation:
+    Average monthly turnover is the mean of all rebalance-date turnover values.
+    Report as a decimal fraction (e.g., 0.564 for 56.4%).
+    Include the initial portfolio build (first rebalance) in the turnover average, where it represents
+    100% turnover (from 0% to fully invested).
+
+  --- Required Deliverables ---
+
+  Report the following performance statistics as numbers:
+    1. Annualized return (strategy)
+    2. Annualized volatility (strategy)
+    3. Sharpe ratio (state: risk-free rate = 0%)
+    4. Maximum drawdown (peak-to-trough, as a negative number or percentage)
+    5. Annualized excess return versus the benchmark (strategy annualized return − benchmark annualized
+       return)
+    6. Average monthly turnover (as a decimal fraction)
+
+  Plus these artifacts:
+    7. A cumulative-return (equity/NAV) curve chart of the strategy versus the benchmark.
+    8. A drawdown chart showing the strategy's drawdown over time.
+    9. The daily NAV series, exported as a data file (CSV), containing at minimum: date, strategy NAV,
+       benchmark NAV.
+
+  --- Ground Rules ---
+
+  Actually run the backtest and report computed results — a described methodology without executed numbers
+  and the NAV series is not acceptable.
+  The reported statistics must be consistent with the delivered NAV series (i.e., recalculating the
+  statistics from the NAV CSV should produce the same numbers to within rounding tolerance).
+  State your data source and explicitly document how you handled point-in-time constituent membership.
+  State your annualization conventions (trading days per year, risk-free rate).
+  Show how turnover and costs were computed — include the formula or code snippet.
+
+  --- Quick Reference: Key Parameters ---
+
+  Universe: CSI 300 constituents, point-in-time per rebalance date.
+  Signal: P[t-21] / P[t-252] - 1 (trading-day offsets, not calendar months).
+  Selection: Top quintile (>= 80th percentile), equal-weight, long-only.
+  Rebalance: Last trading day of each calendar month.
+  Period: 2019-01-02 to 2024-12-31.
+  Benchmark: CSI 300 Total Return (H00300.CSI).
+  Costs: 0.10% commission + 0.10% slippage, applied as NAV × (1 - turnover × 0.002).
+  Annualization: 252 trading days/year, risk-free rate = 0%.
+  Stock filters: Exclude suspended, ST/*ST, limit-hit, insufficient history.
 measurable_outputs:
-  - 六个具名指标（数值形式）
-  - 两张图表（权益曲线、回撤）
-  - 每日 NAV 序列文件
-rubric_weights: {D1: 20, D2: 25, D3: 20, D4: 10, D5: 5, D6: 20}
+  - 六个具名指标（数值形式）：年化收益、年化波动、夏普比率、最大回撤、年化超额收益、月均换手率
+  - 两张图表（策略 vs 基准累计收益曲线、策略回撤图）
+  - 每日 NAV 序列文件（CSV，至少含 date, strategy NAV, benchmark NAV）
+rubric_weights: {D1: 15, D2: 20, D3: 20, D4: 20, D5: 5, D6: 20}
 objective_dims: [D1, D2]
 citation_policy: {mode: none}
-cf_rules: [CF1, CF3, CF5]
+cf_rules: [CF1, CF3]
+objective_scoring_mode: deviation
+objective_scoring_config:
+  description: >
+    D1/D2 客观维度采用偏差评分模式，而非二元通过/失败。
+    当检查点偏差 ≤ tol 时记满分（1.0）；偏差 > tol 时分数连续衰减至 0。
+    衰减公式：score = max(0, 1 - (delta - tol) / (max_dev - tol))，
+    其中 max_dev 由 checkpoint_schema 的 deviation_scoring.max_dev 定义。
+    这取代了 CF5 的"超容差即零分"二元机制，使"接近正确"与"完全错误"产生区分度。
+    CF5 已从 cf_rules 中移除，不再对该任务生效。
 required_inputs:
   - name: prices.csv
-    needed_for: "指标基准真值（momentum_backtest 计算器）"
+    needed_for: "指标基准真值（momentum_backtest 计算器）；后复权收盘价，至少从 2018-01-02 起"
     na_policy: "市场数据缺失 -> 指标检查点 NA；仅回退到 NAV 复现一致性（CF3 防护）"
   - name: benchmark.csv
-    needed_for: "超额收益基准真值"
+    needed_for: "超额收益基准真值；CSI 300 全收益指数 H00300.CSI"
     na_policy: "缺失 -> ann_excess_return NA"
   - name: membership.csv
-    needed_for: "point-in-time 成分股（可选，避免幸存者偏差）"
+    needed_for: "point-in-time CSI 300 成分股（避免幸存者偏差；每月末快照）"
     na_policy: "可选；缺失则用全样本近似并在报告注明"
 task_validators:
   - {name: nav_reproduction, realized_by: "checkpoint nav_reproduces_metrics (consistency, validator: nav_reproduction) — 从提交 NAV 重算 sharpe/ann_return；失败且无轨迹 -> CF3 证据"}
@@ -34,5 +162,6 @@ engine_requirements:
   calculator: momentum_backtest
   gt_kind: calculator
   checkpoint_types: [pct, number, present, count_min, consistency]
+  objective_scoring_mode: deviation
   min_grader_version: "1.0"
   min_aggregator_version: "2.0"

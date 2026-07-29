@@ -1,0 +1,151 @@
+# S9 数据获取稳定性测试 — 检查点 schema
+#
+# v2.3: grounding 检查点细化。Q1-Q4 每题拆为 base_price / latest_price / answer 三元
+#   检查点（grounding:true），由 grounding_group_weights 按 4:4:2 加权。
+#
+# v2.5: 删除 Q5（10 年期美债收益率）。本任务为 4 题（Q1-Q4），全部为 YTD 收益率。
+#   移除的检查点：Q5_answer、Q5_adjustment；data_source_per_question target 5 → 4。
+#
+# GT 值单一数据源：fixtures/groundtruth_snapshot.json
+#   → data_retrieval_snapshot.py 读取 → groundtruth.json values["Q*_base_price"|"Q*_latest_price"|"Q*_answer"]
+#   → grader 从 groundtruth.json 取真值比较（不从本文件的 description 读数值）
+#   更新 GT 只需改 groundtruth_snapshot.json 一处，本文件无需同步修改。
+#
+# 评分模式：二元通过/失败（超容差即零分，CF5）。
+#   - 所有数值检查点 tol = 0（精确匹配，完全正确才得分，100% or 0%）。
+#     理由：数据获取稳定性测试要求精确性——答案必须与基准真值完全一致。
+#     不给部分分：数据获取要么正确要么不正确，不存在"接近正确"。
+#     四舍五入到两位小数后与 GT 比对，完全相等才 PASS。
+#
+#   - grounding 分组加权（grounding_group_weights 配置）：
+#       每题内 base_price:0.4 / latest_price:0.4 / answer:0.2
+#       一题的加权通过率 = 0.4*base_pass + 0.4*latest_pass + 0.2*answer_pass
+#       全部 4 题跨题等权平均（详见 spec）。
+#     示例：Q1 基准价 PASS、最新价 FAIL、答案 FAIL → Q1 加权通过率 = 0.4*1 + 0.4*0 + 0.2*0 = 0.4 = 40%
+#
+# 每个 _answer 检查点同时标 grounding:true 和 methodology:true：
+#   - grounding: 数值是否匹配 GT（数据获取正确性）
+#   - methodology: 口径是否正确（前复权/后复权/上市首日基准等），通过盲评 + 结构字段交叉验证
+#
+# 结构检查点（methodology:true）验证口径选择，非数值比较：
+#   - _adjustment: 复权类型是否与题目要求一致
+#   - _base_date: 基准日选择是否正确（2025-12-31 vs 上市首日）
+#
+# CF5: 超容差的数值检查点记 0 分（不给部分分）。
+# CF4: 用明显陈旧数据冒充最新 -> D1 封顶为等级 1。
+
+fields:
+  # --- Q1: 智谱 02513.HK — 前复权，基准价=IPO发行价 (2026-01-08) ---
+  Q1_base_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q1 基准价：智谱 IPO 发行价（前复权）"
+  Q1_latest_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q1 最新价：智谱最新收盘（前复权）"
+  Q1_answer:
+    type: pct
+    tol: 0
+    grounding: true
+    methodology: true
+    description: "Q1 智谱 YTD 收益率"
+
+  # --- Q2: 贵州茅台 600519.SH — 前复权，基准价=2025-12-31 close ---
+  Q2_base_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q2 基准价：贵州茅台 2025-12-31 前复权 close"
+  Q2_latest_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q2 最新价：贵州茅台最新收盘（前复权）"
+  Q2_answer:
+    type: pct
+    tol: 0
+    grounding: true
+    methodology: true
+    description: "Q2 贵州茅台 YTD 收益率"
+
+  # --- Q3: 沪深300价格指数 000300.SS — 不复权，基准=2025-12-31 指数 ---
+  Q3_base_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q3 基准价：沪深300 2025-12-31 指数点位"
+  Q3_latest_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q3 最新价：沪深300最新指数点位"
+  Q3_answer:
+    type: pct
+    tol: 0
+    grounding: true
+    methodology: true
+    description: "Q3 沪深300价格指数 YTD 涨跌幅"
+
+  # --- Q4: 华安黄金ETF 518880.SH — 后复权，基准价=2025-12-31 close ---
+  Q4_base_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q4 基准价：华安黄金ETF 2025-12-31 后复权 close"
+  Q4_latest_price:
+    type: number
+    tol: 0
+    grounding: true
+    description: "Q4 最新价：华安黄金ETF最新收盘"
+  Q4_answer:
+    type: pct
+    tol: 0
+    grounding: true
+    methodology: true
+    description: "Q4 华安黄金ETF YTD 涨幅"
+
+  # --- 复权口径检查点 (methodology, 非数值比较) ---
+  Q1_adjustment:
+    type: present
+    methodology: true
+    description: "Q1 应使用前复权；验证提交答案中声明的复权类型"
+  Q2_adjustment:
+    type: present
+    methodology: true
+    description: "Q2 应使用前复权"
+  Q3_adjustment:
+    type: present
+    methodology: true
+    description: "Q3 不适用复权（价格指数）"
+  Q4_adjustment:
+    type: present
+    methodology: true
+    description: "Q4 应使用后复权"
+
+  # --- 基准日选择检查点 (methodology) ---
+  Q1_base_date:
+    type: present
+    methodology: true
+    description: "Q1 基准日应为 2026-01-08（IPO 发行日），基准价取 IPO 发行价而非上市首日收盘价"
+  Q2_base_date:
+    type: present
+    methodology: true
+    description: "Q2 基准日应为 2025-12-31"
+  Q3_base_date:
+    type: present
+    methodology: true
+    description: "Q3 基准日应为 2025-12-31"
+  Q4_base_date:
+    type: present
+    methodology: true
+    description: "Q4 基准日应为 2025-12-31"
+
+  # --- 数据来源完整性（methodology, 不参与 grounding 客观锚定；由盲评 D1 评估） ---
+  data_source_per_question:
+    type: count_min
+    target: 4
+    methodology: true
+    description: "每题都应声明数据来源（共 4 题）"

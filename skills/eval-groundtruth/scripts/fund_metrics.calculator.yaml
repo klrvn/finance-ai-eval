@@ -1,15 +1,18 @@
 calculator_id: fund_metrics
 script: fund_metrics.py
-version: "1.0"
+version: "1.1"
 family: fund-screen
 deterministic: true
 network: false
-requires: [pandas, numpy]
-invocation: "--navs {fundA.csv} {fundB.csv} ... --static {static.csv} --rf 0.0 --out {out}"
+requires: [pandas, numpy, pyyaml]
+invocation: "--navs {fundA.csv} {fundB.csv} ... --static {static.csv} --pool {candidate_pool.yaml} --as-of 2026-07-10 --rf 0.0 --out {out}"
 inputs:
-  "fund NAV csvs": "each with columns date, nav (fund identified by filename stem)"
+  "fund NAV csvs": "each with columns date, nav (fund identified by filename stem = fund code, e.g. sh510300.csv)"
   static.csv: "columns: fund, expense_ratio, aum (passthrough; not computable)"
+  candidate_pool.yaml: "30-fund candidate pool definition; used for pool membership verification"
 outputs_per_fund: [ann_return_3y, ann_return_5y, ann_vol, sharpe, max_drawdown]
 passthrough: [expense_ratio, aum]
+pool_membership: "emits pool_codes set for shortlist_from_pool checkpoint"
+as_of_date: "2026-07-10 — all NAV series truncated to this date before metric computation"
 needs_authoritative_navs: true   # if absent, metric_cells_verified -> NA
 self_check: "emits self_check{passed}; dispatcher halts on passed==false"

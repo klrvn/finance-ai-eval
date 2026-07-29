@@ -14,7 +14,7 @@ measurable_outputs:
   - 覆盖不少于 3 类不同来源的引用
   - 不少于 4 个量化数据点
   - 恰好两个具名风险
-rubric_weights: {D1: 30, D2: 10, D3: 15, D4: 25, D5: 10, D6: 10}
+rubric_weights: {D1: 20, D2: 20, D3: 10, D4: 20, D5: 10, D6: 20}
 objective_dims: [D1]               # D1 完全由引用核验锚定
 citation_policy: {mode: full}      # 核验每一条引用——这是防幻觉探针
 cf_rules: [CF1, CF2, CF4]

@@ -85,6 +85,37 @@ def write_json(path, obj):
     json.dump(obj, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 
+def apply_percent_canon(gt, recipe):
+    """Canonicalize declared percentage GT fields to the extractor's *fraction* scale.
+
+    The extractor's validator (skills/eval-extractor/scripts/validators.py) maps any value
+    written with a '%'/'pct' unit to a fraction ('666.35%' -> 6.6635, '4.55%' -> 0.0455).
+    If a calculator emits those same quantities in *percent-magnitude* (666.35, 4.55) the
+    deterministic grader compares 6.6635 vs 666.35 at tol=0 and a CORRECT answer fails purely
+    on scale. To keep both sides on one canonical scale we divide the declared percentage
+    fields by 100 here, mirroring the extractor.
+
+    Opt-in per recipe (no-op — and therefore zero regression risk — when unset):
+        percent_fields: [Q1_answer, Q2_answer, ...]     # top-level, or
+        gt_scale: {percent_fields: [...]}
+    Note: the list is explicit (not derived from checkpoint `type: pct`) precisely because a
+    percentage quantity may be typed `number` — e.g. a bond yield written '4.55%' (S9 carried
+    such a field until v2.5 removed its 10Y-UST question)."""
+    pf = recipe.get("percent_fields") or (recipe.get("gt_scale") or {}).get("percent_fields") or []
+    vals = gt.get("values") or {}
+    changed = []
+    for f in pf:
+        v = vals.get(f)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            vals[f] = v / 100.0
+            changed.append(f)
+    if changed:
+        prov = gt.setdefault("provenance", {})
+        if isinstance(prov, dict):
+            prov["percent_canon"] = {"fields": changed, "op": "value/100 -> fraction (match extractor)"}
+    return gt, changed
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--container", required=True, help="path to a task-spec container dir")
@@ -104,6 +135,7 @@ def main():
     if kind == "internal_consistency":
         out = (recipe.get("groundtruth_output") or {})
         gt = {"values": out.get("values", {}), "recipe": rid, "self_check": out.get("self_check", {"passed": True})}
+        gt, _ = apply_percent_canon(gt, recipe)
         write_json(a.out, gt)
         print(f"gt_dispatch: {rid} (internal_consistency) -> empty values; consistency checks do the work.")
 
@@ -111,7 +143,9 @@ def main():
         if a.snapshot:
             snap = json.load(open(a.snapshot, encoding="utf-8"))
             gt = {"values": snap, "recipe": rid, "self_check": {"passed": True}}
-            print(f"gt_dispatch: {rid} (user_snapshot) -> wrote provided snapshot values.")
+            gt, ch = apply_percent_canon(gt, recipe)
+            print(f"gt_dispatch: {rid} (user_snapshot) -> wrote provided snapshot values."
+                  + (f" percent_canon -> {ch}" if ch else ""))
         else:
             gt = {"values": None, "recipe": rid, "self_check": {"passed": True}}
             print(f"gt_dispatch: {rid} (user_snapshot) -> no snapshot; values=null, grounding checkpoints -> NA.")
@@ -135,9 +169,13 @@ def main():
         print(f"gt_dispatch: {rid} (calculator) -> {' '.join(argv[1:])}")
         proc = subprocess.run(argv)   # calculator writes --out itself
         # Enforce the gate regardless of the script's own exit convention.
-        gate_self_check(a.out)
+        gt = gate_self_check(a.out)
         if proc.returncode != 0:
             print(f"gt_dispatch: note - calculator exited {proc.returncode} but self_check passed; proceeding.")
+        gt, ch = apply_percent_canon(gt, recipe)
+        if ch:
+            write_json(a.out, gt)   # persist canonicalized percentage fields
+            print(f"gt_dispatch: {rid} percent_canon -> divided {ch} by 100 (fraction canon).")
         print(f"gt_dispatch: {rid} self_check passed.")
 
     else:

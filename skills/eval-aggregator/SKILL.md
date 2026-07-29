@@ -60,13 +60,12 @@ description: >
     "D6": {
       "name": "外部工具链完整度",
       "level": 3, "source": "judge_mean", "weight": 20, "weighted_points": 15.0,
-      "judge_1": {"level": 3, "rationale": "关键数据走了野网页抓取",
-                   "deductions": [{"issue": "收益率取自第三方聚合站抓取，存在官方API",
-                                    "severity": "major", "points": 1,
-                                    "evidence": "\"数据来自XX财经网页\""}]},
-      "judge_2": {"level": 3, "rationale": "无执行轨迹",
+      "judge_1": {"level": 3, "rationale": "计算无执行轨迹",
                    "deductions": [{"issue": "计算无执行轨迹", "severity": "major", "points": 1,
                                     "evidence": "全文无代码/工具调用记录"}]},
+      "judge_2": {"level": 3, "rationale": "工具链覆盖不完整",
+                   "deductions": [{"issue": "工具链覆盖不完整", "severity": "major", "points": 1,
+                                    "evidence": "部分关键步骤无工具支撑"}]},
       "summary": "..."
     },
     "D1": {"...": "..."}, "D3": {"...": "..."}, "D4": {"...": "..."}, "D5": {"...": "..."}
@@ -87,7 +86,7 @@ description: >
 
 | 字段 | 说明 |
 |------|------|
-| `name` | 维度中文名（D6 = 外部工具链完整度） |
+| `name` | 维度中文名（D6 = 外部工具链完整度，只评计算执行轨迹与工具链覆盖度，不评数据来源层级） |
 | `description` | 维度评判内容简述 |
 | `level` | 0-4 等级，允许 0.5 步长（可能被 CF 封顶） |
 | `source` | 等级来源：`objective`（实测数值）、`judge_mean`（盲评扣分账本均值）、`judge_mean_fallback`（客观不可用时回退盲评）、`judge_missing`（盲评缺失） |
@@ -108,20 +107,18 @@ description: >
 
 1. **总分与排名**——排名 × 作品 × 总分表，含已应用/待确认 CF 与一行结论（有效分母不一致时附归一化分列）
 2. **各维度评分总览**——逐维度 × 逐作品的等级表，标注来源（客观/盲评）和封顶标记
-3. **各维度详细评分（D1-D6）**——对每个维度，逐作品列出：等级与得分、客观扣分来源（未通过检查点）、两位评分官的逐条扣分记录（扣多少/严重度/问题/证据）、CF 封顶信息、复核标记
+3. **各维度详细评分（D1-D6）**——对每个维度，逐作品列出：等级与得分、客观扣分来源（未通过检查点）、两位评分官的逐条扣分记录（扣多少/严重度/问题/证据）、CF 封顶信息、复核标记；每个维度末尾附**学生答案原文引用**区块，逐条列出该维度扣分点对应的学生答案原文片段（客观维度取自 `normalized.json` 的 `extracted[field].evidence`，主观维度取自盲评扣分账本的 `evidence` 字段），方便用户快速定位答案中的错误位置
 4. **确定性检查点明细**——逐检查点 × 逐作品的 通过/未通过（含偏差值）/NA 表
 5. **引用核验与致命缺陷**——逐作品的 grounding 值、已应用 CF、待确认 CF
 6. **结论**——排序（单份作品为总分陈述）、前两名分差、决定性维度、不确定性说明（当分差 <3 分或决定性维度需复核时标注为暂定）
 
 ## 用法
 
-脚本在插件目录（用 `${CLAUDE_PLUGIN_ROOT}` 定位，Bash 展开）；`--bundle`/`--taskspec`/`--out` 为**用户当前目录**下的运行产物：
-
 ```bash
 # 对单份作品评分
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-aggregator/scripts/aggregate.py" --bundle run/A --taskspec run/taskspec.json --out run/A/scorecard.json
+python scripts/aggregate.py --bundle run/A --taskspec run/taskspec.json --out run/A/scorecard.json
 # 统一报告（单份或多份均用此模式；--compare 为兼容别名）
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-aggregator/scripts/aggregate.py" --report run/A/scorecard.json [run/B/scorecard.json ...] --out run/report.md
+python scripts/aggregate.py --report run/A/scorecard.json [run/B/scorecard.json ...] --out run/report.md
 ```
 
-一个 `--bundle` 目录应包含 `det_results.json`、`citation_audit.json`（如有）、`judge_1.json`、`judge_2.json` 与 `cf_flags.json`。
+一个 `--bundle` 目录应包含 `det_results.json`、`citation_audit.json`（如有）、`judge_1.json`、`judge_2.json` 与 `cf_flags.json`。报告模式下，汇总器还会从每个 bundle 目录读取 `normalized.json`（提取器产出）以获取各检查点字段的学生答案原文片段（`evidence`），用于在维度详细评分中展示"学生答案原文引用"区块。

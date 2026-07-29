@@ -1,0 +1,266 @@
+# S10 三家公司三年财务数据获取 — 检查点 schema
+#
+# 27 个数值检查点 = 3 家公司 × 3 财年 (2023/2024/2025) × 3 指标
+#   (net_profit 归母净利润 / roe 加权净资产收益率 / inventory 存货期末余额)。
+#   命名: <COMPANY>_<FY>_<METRIC>, COMPANY ∈ {ZTE, POPMART, NVDA}。
+#
+# GT 值单一数据源: 计算器 financial_data_snapshot.py 内嵌的冻结答案键
+#   (fixtures/groundtruth_snapshot.json 为其可读镜像/可选 override)
+#   → data_retrieval / gt_dispatch(kind:calculator) → groundtruth.json values[<field>]
+#   → grader 从 groundtruth.json 取真值比较（不从本文件 description 读数值）。
+#   更新 GT 只需改答案键一处, 本文件无需同步修改。
+#
+# 评分模式: 二元通过/失败（超容差即零分, CF5）。
+#   - 所有数值检查点 tol = 0（精确匹配）。理由: 数据获取任务要求精确性——
+#     答案在按题设口径四舍五入后必须与基准真值完全一致, 不给部分分。
+#   - 每个数值检查点显式声明 decimals（生效精度）, 使 tol=0 真正为 0:
+#       number (net_profit/inventory) -> decimals: 2（亿元/亿美元 2 位小数）
+#       pct    (roe)                  -> decimals: 4（GT 经 percent_canon 除以 100 转为
+#                                        fraction, 故"百分数 2 位小数" == "分数 4 位小数"）
+#     若不声明, grader 会从 repr(GT) 推断精度, 而 repr(728.80) == '728.8' 只有 1 位小数,
+#     导致 728.84 被四舍五入为 728.8 而误判 PASS——即在声明 tol=0 之下隐含 ±0.05 的实际容差。
+#     显式 decimals 消除该漏洞；作答仍可给出更高精度（728.804 → 四舍五入到 728.80 → PASS）。
+#   - net_profit / inventory: 单位 亿（CNY 或 USD）, 四舍五入 2 位小数。
+#   - roe: 百分比数值（如 15.19 表示 15.19%）, 四舍五入 2 位小数。
+#
+# 每个数值检查点同时标 grounding:true 与 methodology:true:
+#   - grounding: 数值是否匹配 GT（数据获取正确性 → D1 第一层基线）。
+#   - methodology: 口径/单位/财年/四舍五入是否正确（值正确即证据 → D2 第一层基线）,
+#     并由盲评 + 结构 caliber_* 字段交叉验证。
+#   grounding 检查点默认等权: 每家公司恰 9 个 → 三家在客观锚定中自然均衡（无需 group_weights）。
+#
+# 结构检查点（present, methodology:true）验证口径/单位/财年声明, 非数值比较:
+#   - caliber_net_profit / caliber_roe / caliber_inventory: 是否声明并使用正确口径
+#   - caliber_unit_currency: 货币与单位口径是否正确（中兴/泡泡玛特 CNY 亿元; 英伟达 USD 亿美元; 不跨币种换算）
+#   - caliber_fiscal_year: 财年口径是否正确（英伟达按其 1 月末结束的财年对应, 而非自然年错配）
+#
+# data_source_per_company (count_min, methodology): 每家公司都应声明数据来源（共 3 家）。
+#
+# CF5: 超容差的数值检查点记 0 分（不给部分分）。
+# CF4: 用明显陈旧数据冒充最新（例如把 2024FY 当作最新而漏 2025FY）→ D1 封顶为等级 1。
+# CF1: 捏造财务数字/来源 → 提议给人工, 确凿证据方可封顶总分。
+
+fields:
+  # ============================ 中兴通讯 000063.SZ (CNY 亿元) ============================
+  ZTE_2023_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2023FY 归母净利润（亿元 CNY）"
+  ZTE_2023_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2023FY 加权净资产收益率（%）"
+  ZTE_2023_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2023FY 存货期末余额（亿元 CNY）"
+  ZTE_2024_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2024FY 归母净利润（亿元 CNY）"
+  ZTE_2024_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2024FY 加权净资产收益率（%）"
+  ZTE_2024_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2024FY 存货期末余额（亿元 CNY）"
+  ZTE_2025_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2025FY 归母净利润（亿元 CNY）"
+  ZTE_2025_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2025FY 加权净资产收益率（%）"
+  ZTE_2025_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "中兴通讯 2025FY 存货期末余额（亿元 CNY）"
+
+  # ============================ 泡泡玛特 09992.HK (CNY 亿元) ============================
+  POPMART_2023_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2023FY 归母净利润（亿元 CNY）"
+  POPMART_2023_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2023FY 加权净资产收益率（%）"
+  POPMART_2023_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2023FY 存货期末余额（亿元 CNY）"
+  POPMART_2024_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2024FY 归母净利润（亿元 CNY）"
+  POPMART_2024_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2024FY 加权净资产收益率（%）"
+  POPMART_2024_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2024FY 存货期末余额（亿元 CNY）"
+  POPMART_2025_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2025FY 归母净利润（亿元 CNY）"
+  POPMART_2025_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2025FY 加权净资产收益率（%）"
+  POPMART_2025_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "泡泡玛特 2025FY 存货期末余额（亿元 CNY）"
+
+  # ============================ 英伟达 NVDA.O (USD 亿美元, 财年1月末结束) ============================
+  NVDA_2023_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2023 净利润（亿美元 USD; NVIDIA 财年, 结束于 2023-01）"
+  NVDA_2023_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2023 净资产收益率（%）"
+  NVDA_2023_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2023 存货期末余额（亿美元 USD）"
+  NVDA_2024_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2024 净利润（亿美元 USD; NVIDIA 财年, 结束于 2024-01）"
+  NVDA_2024_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2024 净资产收益率（%）"
+  NVDA_2024_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2024 存货期末余额（亿美元 USD）"
+  NVDA_2025_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2025 净利润（亿美元 USD; NVIDIA 财年, 结束于 2025-01）"
+  NVDA_2025_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2025 净资产收益率（%）"
+  NVDA_2025_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2025 存货期末余额（亿美元 USD）"
+
+  # ============================ 口径检查点 (present, methodology, 非数值比较) ============================
+  caliber_net_profit:
+    type: present
+    methodology: true
+    description: "净利润口径应为归属母公司股东的净利润（归母净利润）, 非合并净利润总额；验证提交答案中声明/使用的口径"
+  caliber_roe:
+    type: present
+    methodology: true
+    description: "净资产收益率口径应为加权净资产收益率, 非摊薄/期末 ROE"
+  caliber_inventory:
+    type: present
+    methodology: true
+    description: "存货口径应为资产负债表存货期末余额, 非平均存货"
+  caliber_unit_currency:
+    type: present
+    methodology: true
+    description: "货币与单位口径: 中兴/泡泡玛特 CNY 亿元; 英伟达 USD 亿美元; 不跨币种换算"
+  caliber_fiscal_year:
+    type: present
+    methodology: true
+    description: "财年口径: 英伟达按其 1 月末结束的财年对应 2023FY/2024FY/2025FY（而非自然年错配）; 中兴/泡泡玛特为自然年"
+
+  # ============================ 数据来源完整性 (count_min, methodology) ============================
+  data_source_per_company:
+    type: count_min
+    target: 3
+    methodology: true
+    description: "每家公司都应声明数据来源（共 3 家）"

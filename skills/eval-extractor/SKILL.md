@@ -32,12 +32,13 @@ description: >
    ```json
    {"claim": "<the numeric/factual claim>", "source": "<title/url/org as written>", "as_of": "<date or null>"}
    ```
-4. 登记**工具链清单** `tool_inventory`——作品中有证据可查的每一次工具/函数调用（API、终端、代码执行、网页抓取），并按 `rubrics/constitution.md` 的来源层级归类（喂 D6 外部工具链完整度）：
+4. 登记**工具链清单** `tool_inventory`——作品中有证据可查的每一次工具/函数调用（API、终端、代码执行、网页抓取），并记录工具用途（喂 D6 外部工具链完整度——D6 只评计算执行轨迹与工具链覆盖度，不评数据来源层级）：
    ```json
    {"tool": "<接口/库/命令名，按作品原文>", "purpose": "<行情获取|定价计算|回测执行|...>",
     "tier": "A|B|C|D", "evidence": "<short quoted span>"}
    ```
    - 层级：A 金融专用数据 API/终端/专业计算库 · B 通用结构化数据源 · C 野网页抓取/搜索摘要 · D 无工具（凭记忆给数）。
+   - **注意**：`tier` 字段仅记录工具调用类型，**不用于来源含金量评分**——数据来源含金量由 D1 依据引用来源判定（见宪法"数据来源含金量分级"）。D6 只依据 `tool_inventory` 评估计算执行轨迹与工具链覆盖度。
    - 只登记作品内**可见证据**支持的调用（轨迹、代码块、来源声明）；没有任何工具证据的数据获取记一条 `{"tool": null, "tier": "D"}` 条目并附对应数据点。不推断、不脑补。
 5. 运行 `scripts/validators.py` 以强制类型/单位转换，并标记超出范围或格式错误的值。它会返回清洗后的字段映射，外加一个 `validator_flags` 列表。
 6. 写出 `run/<label>/normalized.json`：
@@ -55,9 +56,7 @@ description: >
 
 ## 用法
 
-脚本用 `${CLAUDE_PLUGIN_ROOT}` 定位（Bash 展开）；`--normalized`/`--schema`/`--out` 为**用户当前目录**下的运行产物：
-
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-extractor/scripts/validators.py" --normalized run/A/normalized.raw.json --schema <task_schema.json> \
+python scripts/validators.py --normalized run/A/normalized.raw.json --schema <task_schema.json> \
   --out run/A/normalized.json
 ```

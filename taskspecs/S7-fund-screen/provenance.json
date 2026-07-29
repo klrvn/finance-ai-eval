@@ -1,17 +1,15 @@
 {
   "task_id": "S7",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "origin": "legacy-v1",
-  "authored_by": "hand-migration from skills/eval-task-specs/references/tasks.md (S7 block)",
-  "kb_cards": [],
-  "method_evidence": "Legacy reference task. Methodology: 基金筛选对比表；抽样单元格核验；适配性一致性. To be backfilled with KB card citations when the fund-screen family card is authored.",
+  "authored_by": "hand-migration from skills/eval-task-specs/references/tasks.md (S7 block); v1.1 update: fixed candidate pool of 30 equity ETFs + as-of 2026-07-10",
+  "method_evidence": "Legacy reference task. Methodology: 30-fund candidate pool screening; NAV-based metric verification (as-of 2026-07-10); pool membership check; suitability consistency.",
   "engine_versions": {
     "grader": "1.0",
     "aggregator": "2.0",
     "extractor": "1.0"
   },
   "review_status": "frozen",
-  "golden": "pending",
-  "container_hash": "f85ecaf08b84ecd2",
+  "container_hash": "d37eab5ba38e878d",
   "notes": "container_hash stamped by eval-taskspec-lint --stamp."
 }

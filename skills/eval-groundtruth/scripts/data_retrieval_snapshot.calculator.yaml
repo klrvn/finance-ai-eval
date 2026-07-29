@@ -1,0 +1,42 @@
+calculator_id: data_retrieval_snapshot
+script: data_retrieval_snapshot.py
+version: "2.5"
+family: data-retrieval
+deterministic: true
+network: true
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}] [--no-live] [--sim-now {iso8601}]"
+inputs:
+  groundtruth_snapshot.json: "(optional) JSON snapshot fallback if live fetch fails; with --no-live flag, uses snapshot only"
+outputs: [Q1_answer, Q2_answer, Q3_answer, Q4_answer,
+          Q1_ticker, Q2_ticker, Q3_ticker, Q4_ticker,
+          Q1_adjustment, Q2_adjustment, Q3_adjustment, Q4_adjustment,
+          Q1_base_date, Q2_base_date, Q3_base_date, Q4_base_date,
+          Q1_latest_date, Q2_latest_date, Q3_latest_date, Q4_latest_date,
+          Q1_base_price, Q2_base_price, Q3_base_price, Q4_base_price,
+          Q1_latest_price, Q2_latest_price, Q3_latest_price, Q4_latest_price,
+          Q2_latest_source, Q3_latest_source, Q4_latest_source]
+side_outputs: [cross_source_check]
+needs_market_data: true
+self_check: "emits self_check{passed}; re-derives each return from base+latest and compares to stored return_pct"
+cross_source_check: "v2.4: 对 A 股标的(Q2/Q3/Q4)用东方财富 kline API 与 Yahoo 对照；先算 expected_latest_date，Yahoo 缺失/延迟时 fallback 到东方财富取 expected_date 值；两源都缺则 ERROR+NA。provenance.cross_source_check 记录每题裁决(status: PASS/YAHOO_FALLBACK/EM_FALLBACK/CONFLICT/ERROR)。"
+data_sources:
+  Q1: "Yahoo Finance 2513.HK (智谱) — Adj Close, 前复权"
+  Q2: "Yahoo Finance 600519.SS (贵州茅台) — Adj Close, 前复权; cross-verified with 东方财富 1.600519 fqt=1"
+  Q3: "Yahoo Finance 000300.SS (沪深300价格指数) — Adj Close; cross-verified with 东方财富 1.000300 fqt=1, Yahoo缺失时fallback"
+  Q4: "Yahoo Finance 518880.SS (华安黄金ETF) — Close (后复权, backward-adjusted, raw close); cross-verified with 东方财富 1.518880 fqt=2, Yahoo缺失时fallback"
+market_cutoff_logic:
+  HK: "if today is a trading day and before HKT 16:10, use prior trading day close"
+  A_share: "if today is a trading day and before CST 15:00, use prior trading day close"
+migration_note: >
+  v2.5: 删除 Q5(10 年期美债收益率)。任务缩减为 4 题(Q1-Q4，全部 YTD 收益率)；移除 FRED DGS10
+  通道、us_latest_cutoff() 与 US 市场收盘截止逻辑；self_check 的题数分母由 5 改为 4；
+  legacy snapshot fixture 同步删除 Q5 条目。
+  v2.4: 新增 cross-source verification layer (Yahoo + 东方财富)。修复 v2.0 中 Yahoo 对
+  部分 A 股标的(000300.SS/518880.SS)数据延迟导致 GT 静默回退到更早日期的 bug。
+  v2.1: Q3 changed from 全收益指数(H00300.CSI) to 价格指数(000300.SS). D4/D5 weights=0.
+  v2.0 fetches live data from Yahoo Finance query API (and, until v2.5, FRED for the 10Y UST).
+  v1.0 was snapshot-based (read packed JSON fixture). The invocation contract
+  (--out, output schema) remains compatible; --snapshot is now optional fallback.
+  Use --no-live flag to force legacy snapshot mode. --sim-now overrides wall-clock
+  for cutoff logic (reproducible GT at a specific test instant).

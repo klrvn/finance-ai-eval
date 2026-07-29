@@ -1,0 +1,197 @@
+# S11 金融消息面 Web Search — 检查点 schema
+#
+# 13 个 grounding 检查点实现题库的 12 分制（题目一 3 + 题目二 3 + 题目三 6）。
+#   唯一带部分分的分点是题目一第2题，拆成两条腿，再由 spec.yaml 的
+#   grounding_group_weights 组装回"一分"：
+#     Q1_2（Kimi K3 三个价格，全对=1 / 恰对两个=0.5 / 其余=0）
+#         Q1_2_kimi_k3_pricing_all3 : vector,    tol=0 -> 三项全对才通过        权重 0.5
+#         Q1_2_kimi_k3_pricing_set  : set_match, tol=1 -> 至少答对两项即通过    权重 0.5
+#   题库另有两个"全对才给分、不给部分分"的分点，各由单条 vector 检查点实现（组内权重 1.0）：
+#     Q2_3_deal_terms             : 交易金额 + 持股比例，两项全对才通过
+#     Q3_4_islamabad_talks_window : 伊斯兰堡会谈的两日日期，两日全对才通过
+#   其余 9 个分点各由单一检查点承担，组内权重 1.0。
+#
+# GT 值单一数据源: 计算器 news_search_snapshot.py 内嵌的冻结答案键
+#   (fixtures/groundtruth_snapshot.json 为其可读镜像/可选 override)
+#   → gt_dispatch(kind:calculator) → groundtruth.json values[<field>]
+#   → grader 从 groundtruth.json 取真值比较（不从本文件 description 读数值）。
+#   本文件 description 只写"要提取什么、以什么格式提取"。所有格式示例都刻意使用与答案无关的
+#   占位数值，以免把答案泄漏进提取器的上下文（提取器只应报告作答呈现了什么，不得推断答案）。
+#
+# 日期编码: YYYYMMDD 整数（例如 2026年3月5日 -> 20260305）。
+#   题目三第 2、5、6 点存在多来源口径差异，题库容错接受相邻两日 —— GT 取该两日中点的
+#   半整数、tol=0.5，等价于"这两天内通过、之外不通过"。计算器 self_check 校验该编码合法性。
+#   题目三第 1、3、4 点无容错。
+#
+# 评分模式: 二元通过/失败（超容差即零分, CF5）。
+#   - 数值/日期检查点 tol=0 并显式声明 decimals（日期/届数 0；金额 2），使 tol=0 真正为 0。
+#     不声明时 grader 会从 repr(GT) 推断精度，从而在声明的 tol=0 之下引入隐含容差。
+#   - vector: tol=0 逐成员精确匹配，任一成员错或缺则整条不通过（"全对才给分"）。
+#   - set_match: tol 计"漏掉的 GT 成员数"，多余成员不判负（用于"至少答对两项"的门槛腿）。
+#
+# 维度归属:
+#   - grounding:true  —— 13 个答案检查点（答得对不对 → D1 第一层基线）。
+#   - methodology:true —— 4 个口径 present 检查点 + 1 个来源完整度 count_min（→ D2 第一层基线）。
+#     答案检查点【不】标 methodology：本任务的"答对"与"口径纪律"是两类独立失败模式
+#     （日期答对但没写年份 / 价格答对但没说币种与计价单位），分开度量避免 D2 沦为 D1 的复读。
+#
+# CF5: 超容差的数值检查点记 0 分（不给部分分）。
+# CF4: 用明显陈旧的消息冒充最新（如给出已被取代的型号、忽略核验时点前的最新进展）→ D1 封顶为等级 1。
+# CF1: 捏造事实/公告/来源（不存在的公告编号、说法不同的被引来源）→ 提议给人工，确凿证据方可封顶总分。
+
+fields:
+  # ==================== 题目一：AI 新闻（3 分）====================
+  Q1_1_latest_anthropic_model:
+    type: set_match
+    tol: 0
+    grounding: true
+    description: >
+      题目一-1：作答给出的 Anthropic 最新款大模型型号，提取为字符串列表。每个成员规范化为
+      【不含厂商前缀的型号名】，即"系列名 + 版本号"形式：去掉 "Claude " / "claude-" 前缀与
+      日期后缀，保留系列名与版本号本身（例如把 "Claude <系列名> <版本号>" 记为
+      "<系列名> <版本号>"）。作答若给出多个型号，全部列出。比较对大小写与首尾空格不敏感。
+  Q1_2_kimi_k3_pricing_all3:
+    type: vector
+    tol: 0
+    grounding: true
+    description: >
+      题目一-2：Kimi K3 官方 API 价格，提取为对象，三个键固定为
+      input_cache_hit / input_cache_miss / output，值为【美元 / 100 万 token】的数值
+      （例如作答写 "$1.25 / M tokens" 则记 1.25）。题目已明确要求以美元作答。
+      计价规模换算（每千 token → 每百万 token 等，纯乘除）允许；
+      【币种换算一律不做】——作答若以人民币等非美元币种给价，该键记 MISSING 并在 evidence
+      保留原文（汇率不是确定性换算，提取器不得自行套用汇率）。
+      三项全部正确才通过（此腿承担该分点的 0.5 权重）。
+  Q1_2_kimi_k3_pricing_set:
+    type: set_match
+    tol: 1
+    grounding: true
+    description: >
+      题目一-2（门槛腿）：与 Q1_2_kimi_k3_pricing_all3 相同的三个价格，另以【两位小数字符串】
+      列表形式提取，不含货币符号与单位，顺序不限，形如 ["1.25", "2.50", "10.00"]。
+      必须写成字符串而非数字，且一律保留两位小数（本检查点按字符串身份比较）。
+      作答缺失某项则该项不出现在列表中。漏掉至多一项即通过（即"至少答对两项"，
+      此腿承担该分点的另外 0.5 权重）。
+  Q1_3_waic_editions:
+    type: number
+    tol: 0
+    decimals: 0
+    grounding: true
+    description: >
+      题目一-3：作答给出的世界人工智能大会(WAIC)已举办届数，提取为整数
+      （作答写"第 N 届"或"N 届"则记 N）。
+
+  # ==================== 题目二：黑芝麻智能收购亿智电子（3 分）====================
+  Q2_1_acquisition_completion_date:
+    type: number
+    tol: 0
+    decimals: 0
+    grounding: true
+    description: >
+      题目二-1：作答给出的"正式发布公告完成对亿智电子股份收购"的日期，
+      提取为 YYYYMMDD 整数（例如 2026年3月5日 记为 20260305）。
+  Q2_2_revenue_commitment_3y:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    description: >
+      题目二-2：作答给出的业绩承诺中 2026-2028 三年累计含税营业收入的下限，
+      提取为【亿元】为单位的数值（作答写"不低于 X 亿元"则记 X）。
+      作答以元/万元给出时换算为亿元。
+  Q2_3_deal_terms:
+    type: vector
+    tol: 0
+    grounding: true
+    description: >
+      题目二-3：本次收购的交易金额与最终持股比例，提取为对象，两个键固定为
+      deal_amount_yi_cny（交易金额，【亿元】为单位的数值）与
+      stake_pct（最终持有的亿智电子股权比例，【百分数数值】：作答写 "X%" 则记 X，
+      不要换算成小数 X/100）。两项全对才通过（题库：第三题全对才给分，否则 0 分）。
+
+  # ==================== 题目三：霍尔木兹海峡时间线（6 分）====================
+  Q3_1_epic_fury_order_date:
+    type: number
+    tol: 0
+    decimals: 0
+    grounding: true
+    description: >
+      题目三-1：作答给出的"美国总统下令执行 Operation Epic Fury（史诗狂怒）"的日期，
+      提取为 YYYYMMDD 整数。本点无容错。
+  Q3_2_two_week_ceasefire_date:
+    type: number
+    tol: 0.5
+    grounding: true
+    description: >
+      题目三-2：作答给出的"美国宣布接受由巴基斯坦调解的两周临时停火安排"的日期，
+      提取为 YYYYMMDD 整数。本点存在多来源口径差异（达成日 vs 正式宣布/生效日、时区差异），
+      题库容错接受相邻两日 —— GT 为该两日中点的半整数、tol=0.5，故不声明 decimals。
+  Q3_3_strait_reopen_announced_date:
+    type: number
+    tol: 0
+    decimals: 0
+    grounding: true
+    description: >
+      题目三-3：作答给出的"伊朗宣布（有条件）重新开放霍尔木兹海峡航运"的日期，
+      提取为 YYYYMMDD 整数。本点无容错。
+  Q3_4_islamabad_talks_window:
+    type: vector
+    tol: 0
+    grounding: true
+    description: >
+      题目三-4：作答给出的"美伊在巴基斯坦进行伊斯兰堡会谈"的两日日期，提取为对象，
+      两个键固定为 talks_start（起始日）与 talks_end（结束日），均为 YYYYMMDD 整数。
+      作答只给出单一日期时，该日期记入 talks_start，talks_end 记 MISSING。
+      两日都正确才通过——本点无容错、也不给部分分（对象缺键或任一日期错即判未通过）。
+  Q3_5_mou_signed_date:
+    type: number
+    tol: 0.5
+    grounding: true
+    description: >
+      题目三-5：作答给出的"美伊两国总统正式签署谅解备忘录"的日期，提取为 YYYYMMDD 整数。
+      本点存在多来源口径差异（题库 3.3 归因于时区差异，或"签署日"与"正式公布日"的口径差异），
+      题库容错接受相邻两日 —— GT 为该两日中点的半整数、tol=0.5，故不声明 decimals。
+  Q3_6_truce_declared_over_date:
+    type: number
+    tol: 0.5
+    grounding: true
+    description: >
+      题目三-6：作答给出的"美国总统正式宣布此前的休战安排已经结束"的日期，
+      提取为 YYYYMMDD 整数。本点存在多来源口径差异（表态日 vs 正式宣布日），
+      题库容错接受相邻两日 —— GT 为该两日中点的半整数、tol=0.5，故不声明 decimals。
+
+  # ==================== 口径检查点（present, methodology, 非数值比较）====================
+  caliber_dates_with_year:
+    type: present
+    methodology: true
+    description: >
+      口径规则 4：所有日期是否写明年份（而非只写"7月14日"这种无年份写法）。
+      提取作答中体现该口径的写法/声明；作答通篇日期均带年份则记为已满足，
+      存在不带年份的日期则记 MISSING。
+  caliber_event_date_basis:
+    type: present
+    methodology: true
+    description: >
+      口径规则 3：时间线日期是否以【事件实际发生日或政策生效日】为准，并在存在多来源差异时
+      说明所采用的口径（发生日 / 宣布日 / 生效日、时区）。提取作答中的口径声明。
+  caliber_precise_official_values:
+    type: present
+    methodology: true
+    description: >
+      口径规则 1-2：数值是否取自题目指定来源/监管原文/官方定价页的【精确值】，而非未经说明的
+      媒体约数（形如"约 X 亿元""大约 X 成"）。提取作答中对所用口径与来源精确性的声明。
+  caliber_asof_cutoff:
+    type: present
+    methodology: true
+    description: >
+      口径规则 5：是否声明了题设的数据核验时点（2026-07-27）并据此界定"最新"。
+      提取作答中的 as-of / 数据截止声明。
+
+  # ==================== 数据来源完整性（count_min, methodology）====================
+  data_source_per_question:
+    type: count_min
+    target: 3
+    methodology: true
+    description: >
+      每道大题（题目一 / 题目二 / 题目三，共 3 道）都应声明数据来源；
+      提取给出了来源声明的大题数量。

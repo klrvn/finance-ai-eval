@@ -1,18 +1,16 @@
 {
   "task_id": "S4",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "origin": "legacy-v1",
-  "authored_by": "hand-authored 2026-07-09 from alphamind-eval-skills/tasks/S4_attribution_enhanced.md (task redefined: single-period Brinson sector attribution -> multi-factor attribution of CSI300 vs CSI500 gap)",
-  "supersedes": "S4 v1.0.0 (single-period brinson); breaking task-definition change; tier T1 -> T2",
-  "kb_cards": [],
-  "method_evidence": "Decompose CSI300-CSI500 3y gap into sector-allocation + CNE5 style-factor + stock-selection legs. Objective anchor = sum-of-effects reconciliation (consistency). Sector leg optionally verifiable via shared brinson calculator if index sector w/r supplied; CNE5 factor leg has no shared calculator -> blind methodology + grounding. To be backfilled with a multifactor-attribution KB card.",
+  "authored_by": "hand-authored 2026-07-09 from alphamind-eval-skills/tasks/S4_attribution_enhanced.md (task redefined: single-period Brinson sector attribution -> multi-factor attribution of CSI300 vs CSI500 gap); v2.1.0: prompt_text replaced with full spec from S4_attribution_enhanced.md v2 (explicit dates 2023-07-16~2026-07-15, full CNE5 9-factor codes, Brinson-Fachler model, Fama-MacBeth regression spec, precision rules, residual economic meaning)",
+  "supersedes": "S4 v1.0.0 (single-period brinson); breaking task-definition change; tier T1 -> T2. v2.1.0 supersedes v2.0.0 prompt summary with full unambiguous spec.",
+  "method_evidence": "Decompose CSI300-CSI500 gap (2023-07-16 ~ 2026-07-15) into sector-allocation (Brinson-Fachler) + CNE5 style-factor (9 factors: LNCAP/BETA/RSTR/ResVOL/NLSIZE/BTOPL/LIQUIDTY/EARNYILD/GROWTH, Fama-MacBeth monthly cross-sectional regression, sqrt(free-float-cap) weighting, all-A-share universe) + stock-selection (residual). Objective anchor = sum-of-effects reconciliation (consistency). Sector leg optionally verifiable via shared brinson calculator if index sector w/r supplied; CNE5 factor leg has no shared calculator -> blind methodology + grounding.",
   "engine_versions": {
     "grader": "1.0",
     "aggregator": "2.0",
     "extractor": "1.0"
   },
   "review_status": "frozen",
-  "golden": "pending",
-  "container_hash": "2b15a66400065b9d",
-  "notes": "Tier downgraded T1->T2: CNE5 factor attribution has no library calculator, so only the reconciliation is objectively checkable by default. Optional upgrades (brinson sector leg + a new cne5_factor_attribution calculator) documented in gt_recipe.yaml. container_hash stamped by eval-taskspec-lint --stamp."
+  "container_hash": "ddd636f007fa7f70",
+  "notes": "Tier downgraded T1->T2: CNE5 factor attribution has no library calculator, so only the reconciliation is objectively checkable by default. Optional upgrades (brinson sector leg + a new cne5_factor_attribution calculator) documented in gt_recipe.yaml. v2.1.0: prompt_text expanded to full unambiguous specification from S4_attribution_enhanced.md; measurable_outputs refined with 9 CNE5 factor codes and monthly attribution; required_inputs enhanced with full-return-index tickers and factor-exposure source notes; judge_notes.md updated with BF model, Fama-MacBeth, precision, and residual-meaning anchors. container_hash stamped by eval-taskspec-lint --stamp."
 }

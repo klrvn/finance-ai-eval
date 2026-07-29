@@ -84,12 +84,44 @@ def _within(a, b, tol, rel):
     return delta <= thresh, delta
 
 
-def compare_scalar(ex, truth, tol, rel, ftype):
+def compare_scalar(ex, truth, tol, rel, ftype, decimals=None):
     if ex is None or truth is None:
         return None, None
     if ftype == "bp":
         delta = abs(ex - truth) * 10000.0
         return delta <= tol, delta               # tol in bp
+    # --- precision harmonization (tol=0 exact-match regime) ---
+    # Rule: when tol=0 (exact match required), if the student value carries more
+    # decimal places than the ground truth, round the student value down to the
+    # GT's decimal precision before comparing.  E.g. GT=9.30 (2dp), student=9.301
+    # (3dp) -> round student to 9.30 -> PASS.  This prevents penalizing students
+    # who report higher-precision data that rounds to the correct 2-dp checkpoint
+    # value.  Only applies when tol==0; with tol>0 the tolerance already absorbs
+    # sub-precision differences.
+    #
+    # Precision is taken from the checkpoint's declared `decimals` when present,
+    # and only otherwise inferred from repr(truth).  Inference is unsound for GT
+    # values with a trailing zero: repr(728.80) is '728.8', so the GT reads as
+    # 1dp and a wrong answer of 728.84 would be rounded to 728.8 and PASS —
+    # a silent ±0.05 tolerance under a declared tol=0.  Declaring `decimals: 2`
+    # pins the intended precision and restores true exact matching.
+    if tol == 0 and isinstance(truth, float):
+        if decimals is not None:
+            _gt_decimals = int(decimals)
+        else:
+            _gt_str = repr(truth)
+            if "." in _gt_str and "e" not in _gt_str:
+                _gt_decimals = len(_gt_str.split(".")[1])
+            else:
+                _gt_decimals = 0
+        if _gt_decimals > 0 and isinstance(ex, float):
+            _ex_str = repr(ex)
+            if "." in _ex_str and "e" not in _ex_str:
+                _ex_decimals = len(_ex_str.split(".")[1])
+            else:
+                _ex_decimals = 0
+            if _ex_decimals > _gt_decimals:
+                ex = round(ex, _gt_decimals)
     return _within(ex, truth, tol, rel)
 
 
@@ -180,24 +212,44 @@ def gt_lookup(gt, field):
     return (gt.get("values") or {}).get(field)
 
 
+def _deviation_score(delta, tol, max_dev):
+    """Continuous deviation-based score: 1.0 at-or-below tol, linear decay to 0 at max_dev.
+
+    Returns a float in [0.0, 1.0].  If max_dev <= tol, falls back to binary (1.0 if delta<=tol else 0.0).
+    """
+    if delta <= tol:
+        return 1.0
+    if max_dev is None or max_dev <= tol:
+        return 0.0
+    score = 1.0 - (delta - tol) / (max_dev - tol)
+    return max(0.0, min(1.0, score))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--schema", required=True)
     ap.add_argument("--normalized", required=True)
     ap.add_argument("--groundtruth", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--scoring-mode", default="binary", choices=["binary", "deviation"],
+                    help="binary=pass/fail (default); deviation=continuous deviation-based scoring")
     a = ap.parse_args()
     schema = json.load(open(a.schema, encoding="utf-8"))
     norm = json.load(open(a.normalized, encoding="utf-8"))
     gt = json.load(open(a.groundtruth, encoding="utf-8")) if a.groundtruth else {}
-    ex = norm.get("extracted", {})
+    ex = norm.get("extracted") or norm.get("fields") or {}
     env = build_env(ex)
+    scoring_mode = a.scoring_mode
 
     checks, na, cf5 = {}, [], []
     graded = passed = g_graded = g_passed = m_graded = m_passed = 0
+    # Deviation-mode accumulators: sum of per-checkpoint deviation scores (for weighted-average fraction)
+    dev_sum = g_dev_sum = m_dev_sum = 0.0
+    dev_graded = g_dev_graded = m_dev_graded = 0
 
-    def record(field, ok, rec, grounding, methodology, deterministic=True):
+    def record(field, ok, rec, grounding, methodology, deterministic=True, delta=None, tol=None, max_dev=None):
         nonlocal graded, passed, g_graded, g_passed, m_graded, m_passed
+        nonlocal dev_sum, g_dev_sum, m_dev_sum, dev_graded, g_dev_graded, m_dev_graded
         checks[field] = rec
         if ok is None:                       # NA
             na.append(field); return
@@ -206,6 +258,15 @@ def main():
             g_graded += 1; g_passed += int(bool(ok))
         if methodology:
             m_graded += 1; m_passed += int(bool(ok))
+        # Deviation-mode scoring: accumulate continuous score for numeric scalar checkpoints
+        if scoring_mode == "deviation" and deterministic and delta is not None and tol is not None:
+            dscore = _deviation_score(delta, tol, max_dev)
+            rec["deviation_score"] = round(dscore, 6)
+            dev_sum += dscore; dev_graded += 1
+            if grounding:
+                g_dev_sum += dscore; g_dev_graded += 1
+            if methodology:
+                m_dev_sum += dscore; m_dev_graded += 1
         if deterministic and not ok:
             rec.setdefault("cf5", True); cf5.append(field)
 
@@ -330,15 +391,22 @@ def main():
         if status != "value" or val is None:
             record(field, False, {"result": "fail", "note": "missing extracted value"}, grounding, methodology)
             continue
-        ok, delta = compare_scalar(float(val), float(truth), tol, rel, ftype)
+        ok, delta = compare_scalar(float(val), float(truth), tol, rel, ftype, meta.get("decimals"))
+        max_dev = None
+        ds_cfg = meta.get("deviation_scoring") if isinstance(meta, dict) else None
+        if ds_cfg and isinstance(ds_cfg, dict):
+            max_dev = ds_cfg.get("max_dev")
         record(field, ok, {"result": "pass" if ok else "fail",
                            "delta": round(delta, 8) if delta is not None else None,
                            "unit": "bp" if ftype == "bp" else "",
-                           "extracted": val, "ground_truth": truth}, grounding, methodology)
+                           "extracted": val, "ground_truth": truth},
+               grounding, methodology,
+               delta=delta, tol=tol, max_dev=max_dev)
 
     out = {
         "work_label": norm.get("work_label"),
         "task_id": norm.get("task_id"),
+        "scoring_mode": scoring_mode,
         "checkpoints": checks,
         "pass_fraction": round(passed / graded, 4) if graded else None,
         "grounding_pass_fraction": round(g_passed / g_graded, 4) if g_graded else None,
@@ -346,9 +414,18 @@ def main():
         "na_checkpoints": na,
         "cf5_hits": cf5,
     }
+    # In deviation mode, also output continuous deviation-based fractions
+    if scoring_mode == "deviation":
+        out["deviation_fraction"] = round(dev_sum / dev_graded, 4) if dev_graded else None
+        out["grounding_deviation_fraction"] = round(g_dev_sum / g_dev_graded, 4) if g_dev_graded else None
+        out["methodology_deviation_fraction"] = round(m_dev_sum / m_dev_graded, 4) if m_dev_graded else None
     json.dump(out, open(a.out, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-    print(json.dumps({k: out[k] for k in ("pass_fraction", "grounding_pass_fraction",
-                                          "methodology_pass_fraction", "na_checkpoints", "cf5_hits")},
+    print_keys = ("pass_fraction", "grounding_pass_fraction",
+                  "methodology_pass_fraction", "na_checkpoints", "cf5_hits")
+    if scoring_mode == "deviation":
+        print_keys += ("deviation_fraction", "grounding_deviation_fraction",
+                        "methodology_deviation_fraction")
+    print(json.dumps({k: out[k] for k in print_keys if k in out},
                      indent=2, ensure_ascii=False))
 
 

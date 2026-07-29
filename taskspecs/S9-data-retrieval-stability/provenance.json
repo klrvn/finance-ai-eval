@@ -1,0 +1,45 @@
+{
+  "task_id": "S9",
+  "version": "2.5.0",
+  "origin": "legacy-v1",
+  "authored_by": "WorkBuddy agent, from user-provided answer key (alphamind_test_answers) and question list (data_retrieval_test_questions)",
+  "method_evidence": "4 financial data retrieval questions (v2.5; the former 5th, US 10Y Treasury yield, was deleted) covering: 港股个股 YTD return (前复权, IPO发行价基准), A股个股 YTD return (前复权), 指数 YTD return (沪深300价格指数 000300.SS), ETF YTD return (后复权). Tests data retrieval stability: correct ticker, correct adjustment type, correct base date, correct latest date, correct formula. GT v2.5: live fetch from Yahoo Finance (2513.HK/600519.SS/000300.SS/518880.SS). v2.1 changes: D4 weight=0, D5 weight=0 (anchors merged into D2), D1 weight 30→40, D2 weight 15→20, Q3 changed from 全收益指数(H00300.CSI) to 价格指数(000300.SS). v2.2 changes: Q1 base price changed from 上市首日收盘价(131.50) to IPO发行价(116.20), sourced from 港交所招股结果公告, hardcoded in IPO_PRICES registry in calculator. v2.3 changes: D1 客观 fraction 内部权重由默认 0.6/0.4 改为 0.3(citation)/0.7(grounding); grounding 检查点由 5 个最终答案细化为 Q1-Q4 每题 base_price/latest_price/answer 三元（4:4:2 加权），Q5 保持单 answer。新增容器可选字段 d1_objective_weights 与 grounding_group_weights（宪法 §1 可参数化面扩展）。aggregate.py 增加 _grouped_grounding_fraction() 实现分组加权。示例: Q1 基准价 PASS / 最新价 FAIL / 答案 FAIL → Q1 加权通过率 40%。",
+  "source_files": {
+    "answers": "C:/Users/RBLU/Downloads/alphamind_test_answers (3).md",
+    "questions": "C:/Users/RBLU/Downloads/data_retrieval_test_questions.md"
+  },
+  "engine_versions": {
+    "grader": "1.0",
+    "aggregator": "2.3",
+    "extractor": "1.0",
+    "calculator": "data_retrieval_snapshot.py v2.5 (Live API + cross-source check, 4 questions)"
+  },
+  "review_status": "frozen",
+  "container_hash": "pending_recompute",
+  "data_provisioned": {
+    "mode": "live_api",
+    "gt_kind": "calculator",
+    "calculator": "data_retrieval_snapshot.py v2.2 (Live API + IPO registry)",
+    "data_sources": {
+      "Q1": "IPO发行价 116.20 (港交所招股结果公告, IPO_PRICES注册表) + Yahoo Finance 2513.HK 最新价 — 前复权",
+      "Q2": "Yahoo Finance 600519.SS (贵州茅台) — Adj Close, 前复权",
+      "Q3": "Yahoo Finance 000300.SS (沪深300价格指数) — Adj Close",
+      "Q4": "Yahoo Finance 518880.SS (华安黄金ETF) — Close, 后复权"
+    },
+    "market_cutoff_logic": {
+      "HK": "当日为交易日且未过HKT 16:10 → 取上一交易日收盘",
+      "A_share": "当日为交易日且未过CST 15:00 → 取上一交易日收盘"
+    },
+    "legacy_fallback": "fixtures/groundtruth_snapshot.json (v1.0快照, --no-live模式使用)",
+    "self_check": "re-derives each return_pct from base_price and latest_price (4 questions)"
+  },
+  "migration_plan": {
+    "v2.5_current": "删除 Q5（10年期美国国债收益率）。任务由 5 题缩减为 4 题（Q1-Q4，全部为 YTD 收益率）。容器侧：spec.prompt_text 移除 Q5 题目/Quick Reference/国债收益率换算约定，measurable_outputs 5→4，grounding_group_weights 去掉 Q5_ 组（跨组平均由 5 组变 4 组），citation_policy.k 5→4（本任务每题一条承重来源，k 跟随题数），checkpoint_schema 删除 Q5_answer 与 Q5_adjustment、data_source_per_question target 5→4，judge_notes 的 D1 第一层清单/D2 复权口径范围/D3 每题锚点/D6 关键计算步骤同步为 4 题，legacy fixtures/groundtruth_snapshot.json 删除 Q5 条目。引擎侧：data_retrieval_snapshot.py 删除 fetch_fred_dgs10() 与 us_latest_cutoff()、Q5 取数块、snapshot 模式的 Q5 分支与 latest_yield 特例，新增 QUESTION_IDS/N_QUESTIONS 驱动 self_check 分母（5→4）并移除 'Q5 missing latest_yield' 断言；sidecar outputs 去掉 Q5_* 五项、data_sources 与 market_cutoff_logic 去掉 FRED/US；gt_recipe produces 与 percent_fields 去掉 Q5_answer。维度权重不变（D1:40 D2:20 D3:15 D4:0 D5:0 D6:25 = 100）。",
+    "v1.0": "snapshot-to-GT calculator reads packed JSON fixture (2026-07-17数据)",
+    "v2.0_current": "计算器从Yahoo Finance query API和FRED XML实时获取最新数据",
+    "v2.3": "D1 客观锚定细化：d1_objective_weights 0.3/0.7 + grounding_group_weights 4:4:2; 需扩展 data_retrieval_snapshot.py 产出 Q*_base_price/Q*_latest_price 中间值（当前只产出 _answer，待补）",
+    "v2.4_current": "新增 cross-source verification layer：对 A 股标的(Q2/Q3/Q4)用东方财富 kline API 与 Yahoo 对照；先算 expected_latest_date(基于 as-of+市场收盘)，Yahoo 缺失/延迟时 fallback 到东方财富取 expected_date 值；两源都缺则 ERROR+NA。修复 Yahoo 对 000300.SS/518880.SS 数据延迟导致 GT 静默回退的 bug。",
+    "compatibility": "checkpoint_schema.yaml 已新增 base_price/latest_price 字段；计算器 v2.1 产出 Q*_base_price/Q*_latest_price 并经 cross-source 校正；aggregator 在 grounding_group_weights 配置下自动计算分组加权通过率"
+  },
+  "notes": "v2.5: 4 questions (Q1-Q4); Q5 (10Y UST yield) deleted from container + engine; citation k=5→4; weights unchanged. Container updated via expert-manager skill. GT: live fetch from Yahoo Finance + East Money cross-source verification layer. Weight: D1:40 D2:20 D3:15 D4:0 D5:0 D6:25. CF: CF1+CF4+CF5. Citation: sample,k=5. v2.3 D1 客观锚定: d1_objective_weights={citation:0.3, grounding:0.7}; grounding_group_weights: Q1-Q4 {base_price:0.4, latest_price:0.4, answer:0.2}, Q5 {answer:1.0}. Scoring: binary pass/fail + CF5 (tol=0). Data fetch mode: live_api. Market cutoff: HK 16:10 HKT, A-share 15:00 CST, US 17:00 ET. v2.1: Q3 changed from 全收益指数 to 价格指数. v2.2: Q1 base price changed to IPO发行价 116.20. v2.3: D1 客观 fraction 0.3/0.7 + grounding 4:4:2 分组加权. v2.4: 新增 cross-source verification layer — 对 A 股标的(Q2/Q3/Q4)用东方财富 kline API 与 Yahoo 对照：先按 as-of+市场收盘逻辑算出 expected_latest_date(正确目标日期)，再看 Yahoo 取到的 latest_date 是否==expected；若 Yahoo 缺失/延迟(如 000300.SS/518880.SS 的 07-20)则自动 fallback 到东方财富取 expected_date 的值；两源都缺则标 ERROR+检查点 NA。provenance.cross_source_check 记录每题裁决。修复了 v2.0 中 Yahoo 对部分 A 股标的数据延迟导致 GT 静默回退到更早日期的 bug。"
+}

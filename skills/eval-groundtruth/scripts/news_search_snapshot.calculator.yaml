@@ -1,0 +1,55 @@
+calculator_id: news_search_snapshot
+script: news_search_snapshot.py
+version: "1.1"
+family: news-data-retrieval
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+inputs:
+  groundtruth_snapshot.json: "(optional) override answer key JSON (flat {checkpoint: value}, or wrapped as {values:{...}}); default GT is the embedded frozen answer key"
+outputs:
+  # 13 checkpoint values realizing the task's 12-point scheme
+  # (only Q1_2 is split into two legs — see grounding_group_weights in spec.yaml)
+  - Q1_1_latest_anthropic_model
+  - Q1_2_kimi_k3_pricing_all3
+  - Q1_2_kimi_k3_pricing_set
+  - Q1_3_waic_editions
+  - Q2_1_acquisition_completion_date
+  - Q2_2_revenue_commitment_3y
+  - Q2_3_deal_terms
+  - Q3_1_epic_fury_order_date
+  - Q3_2_two_week_ceasefire_date
+  - Q3_3_strait_reopen_announced_date
+  - Q3_4_islamabad_talks_window
+  - Q3_5_mou_signed_date
+  - Q3_6_truce_declared_over_date
+side_outputs: []
+needs_market_data: false
+self_check: >
+  emits self_check{passed}; verifies all 13 checkpoints present with the shape their type requires,
+  dates are real YYYYMMDD calendar days inside the task window, the three tolerant dates are exact
+  half-integer midpoints bracketing two same-month days, the two-day talks window is genuinely two
+  consecutive days, the Q1_2 split legs are both present, and the Q1_2 vector and set legs describe
+  the same three prices
+encoding:
+  dates: "YYYYMMDD integer (2026年7月14日 -> 20260714)"
+  tolerant_dates: "half-integer midpoint + tol 0.5 == exactly the two accepted adjacent days (题目三 第2/第5/第6 点)"
+  two_day_window: "题目三 第4点 = vector of two consecutive YYYYMMDD days, tol=0 (both required, no partial credit)"
+  prices: "USD per 1M token"
+  amounts: "亿元 (CNY)"
+  stake_pct: "percent magnitude (60 == 60%), not a fraction"
+data_cutoff: "2026-07-27"
+point_scheme: "12 分：题目一 3 + 题目二 3 + 题目三 6"
+migration_note: >
+  v1.1 (2026-07-28): tracks the revised question set / answer key. 题目三 was restructured from
+  seven items to six: the old #4 (巴总理宣布美伊敲定 MOU、美国解除海上封锁) and the old #6
+  (三艘船只遭袭的两日区间) were REMOVED; a new #4 (美伊伊斯兰堡会谈的两日日期) was ADDED as an
+  all-or-nothing two-day vector; #5 (签署谅解备忘录) GAINED a ±1-day tolerance it did not have;
+  the old #7 (宣布休战结束) became #6 with its values unchanged. Bank total therefore moves 13 -> 12
+  (题目三 7 -> 6) and the only remaining partial-credit point is the Kimi pricing item.
+  v1.0: initial snapshot-to-GT calculator. Ground truth is a FROZEN answer key from the task's
+  标准答案 document, packed as an embedded constant (nothing to fetch — every answer is a definite
+  fact as of the 2026-07-27 数据核验时点). --snapshot optionally overrides the embedded key with an
+  updated one of the same flat shape. Mirrors S10's financial_data_snapshot.py (network-free,
+  self-checked).

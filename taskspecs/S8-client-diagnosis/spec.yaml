@@ -15,7 +15,7 @@ measurable_outputs:
   - 当前权重与目标权重，二者均加总为 100%
   - 声明的预期风险/收益影响
   - 一个适配性标记（或明确的"无顾虑"）
-rubric_weights: {D1: 15, D2: 15, D3: 15, D4: 20, D5: 25, D6: 10}
+rubric_weights: {D1: 10, D2: 20, D3: 15, D4: 20, D5: 15, D6: 20}
 objective_dims: [D2]
 citation_policy: {mode: none}
 cf_rules: [CF1, CF5]

@@ -1,0 +1,29 @@
+{
+  "values": {
+    "ann_return": 0.068892,
+    "ann_vol": 0.197569,
+    "sharpe": 0.4362,
+    "max_drawdown": -0.390329,
+    "ann_excess_return": -0.004145,
+    "avg_monthly_turnover": 0.564007
+  },
+  "artifacts": {
+    "nav_csv": "C:/Users/RBLU/WorkBuddy/2026-07-14-17-58-43/run\\nav.csv"
+  },
+  "provenance": {
+    "script": "momentum_backtest.py",
+    "params": {
+      "commission": 0.001,
+      "slippage": 0.001,
+      "start": "2019-01-01",
+      "end": "2024-12-31"
+    },
+    "prices_sha256": "acaab5b47c0be734",
+    "computed_at": "2026-07-14T09:54:42.962174+00:00"
+  },
+  "self_check": {
+    "passed": true,
+    "n_days": 1455,
+    "n_rebalances": 41
+  }
+}

@@ -3,10 +3,14 @@ kind: calculator
 calculator:
   script: skills/eval-groundtruth/scripts/fund_metrics.py
   sidecar: skills/eval-groundtruth/scripts/fund_metrics.calculator.yaml
-  invocation: "--navs {navs} --static {static} --rf 0.0 --out {out}"   # navs = space-separated NAV csv paths
-  produces: "values.funds[fund][metric] for sampled-cell verification"
+  invocation: "--navs {navs} --static {static} --pool candidate_pool.yaml --as-of 2026-07-10 --rf 0.0 --out {out}"
+  # navs = 30 只基金的 5 年 NAV CSV（文件名 stem = 基金代码，如 sh510300.csv）
+  # pool  = 候选池定义（candidate_pool.yaml），用于核验作品所选基金是否在池内
+  # as-of = 固定截至日期，所有指标计算截断至此日
+  produces: "values.funds[fund][metric] for sampled-cell verification + pool membership set"
   passthrough: [expense_ratio, aum]   # 不可计算，从 static.csv 透传
 self_check: required
 inputs_required:
-  - {name: "fund NAV csvs", na_policy: "无权威 NAV -> metric_cells_verified NA；表格/适配性仍评"}
+  - {name: "fund NAV csvs (30 files)", na_policy: "无权威 NAV -> metric_cells_verified NA；表格/适配性仍评"}
   - {name: "static.csv (expense_ratio, aum)", optional: true}
+  - {name: "candidate_pool.yaml", needed_for: "pool membership verification"}

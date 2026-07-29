@@ -3,7 +3,8 @@ name: eval-groundtruth
 description: >
   计算用于为 AlphaMind 评测任务打分的确定性基准真值参考答案：债券分析（S3，QuantLib）、
   多因子归因任务可复用的单期 Brinson-Fachler 行业腿计算器（S4 可选升级）、线性因子冲击下的组合盈亏（S5 自定义冲击段）、
-  月度动量回测（S2）、基金风险指标（S7）、由样本派生的客户指标（S8），
+  月度动量回测（S2）、基金风险指标（S7）、由样本派生的客户指标（S8）、数据获取稳定性测试（S9，4 题，live 行情→GT）、
+  三家公司三年财务数据（S10，冻结答案键快照）、金融消息面 Web Search 取数（S11，冻结答案键快照），
   以及两种无脚本方案——杜邦恒等式内部一致性检查（S1）与宏观快照（S6）。
   当编排器在检查点评分之前需要一份参考包时调用，使用任务的 gt_recipe。基准真值只构建一次，并在所有作品间共享。
 ---
@@ -25,9 +26,9 @@ description: >
 
 ## 计算方案（recipes）
 
-当前围绕 S1-S8 覆盖 9 种可调度方案：6 种可执行脚本/共享计算器方案（其中 `brinson` 为可复用行业腿计算器），3 种无脚本方案（靠一致性检查或用户提供快照）。
+当前围绕 S1-S11 覆盖 12 种可调度方案：9 种可执行脚本/共享计算器方案（其中 `brinson` 为可复用行业腿计算器），3 种无脚本方案（靠一致性检查或用户提供快照）。
 
-### 有脚本的方案（6 种）
+### 有脚本的方案（9 种）
 
 | gt_recipe | 脚本 | 默认任务/用途 | 输入 | 说明 |
 |---|---|---|---|---|
@@ -37,6 +38,9 @@ description: >
 | `momentum_backtest` | `scripts/momentum_backtest.py` | S2 | `prices.csv`（日期 × 标的，复权）、`benchmark.csv`（日期、点位），可选 `membership.csv` | 需要市场数据。若缺失，编排器仅回退到 NAV 复现一致性。 |
 | `fund_metrics` | `scripts/fund_metrics.py` | S7 | 各基金 NAV/收益 CSV + 一份 `static.csv`（费率、管理规模 AUM） | 计算收益/波动率/夏普/最大回撤；费率与 AUM 为透传（不可计算）。 |
 | `client_metrics` | （使用 `linear_shock.py --metrics`） | S8 | `s8_client.csv/xlsx` | 第一大持仓占比 %、权益占比 %、综合费率、HHI 集中度。 |
+| `data_retrieval_snapshot` | `scripts/data_retrieval_snapshot.py` | S9 | `groundtruth_snapshot.json`（4 题数值快照） | v1.0 读取打包 JSON 快照；v2.0 从 Yahoo Finance live 获取（v2.5 前另含 FRED 取 10Y 美债）；**v2.5 删除 Q5（10 年期美债收益率）→ 4 题(Q1-Q4)，移除 FRED 通道与 US 收盘截止逻辑**；**v2.4 新增 cross-source verification layer**：对 A 股标的(Q2/Q3/Q4)用东方财富 kline API 与 Yahoo 对照，先按 as-of+市场收盘算 expected_latest_date，Yahoo 缺失/延迟时 fallback 到东方财富取 expected_date 值，两源都缺则 ERROR+NA。修复了 Yahoo 对 000300.SS/518880.SS 数据延迟导致 GT 静默回退的 bug。`--sim-now` 可注入 as-of 时点。 |
+| `financial_data_snapshot` | `scripts/financial_data_snapshot.py` | S10 | 无（答案键内嵌）；`--snapshot` 可选 override | 网络无关的 snapshot→GT。三家公司 × 三财年 × 三指标（归母净利润/加权ROE/存货期末余额）= 27 个来自公司财报的冻结值，展开为扁平检查点。self_check 校验 27 值齐备、数值有限、ROE 落在合理区间。 |
+| `news_search_snapshot` | `scripts/news_search_snapshot.py` | S11 | 无（答案键内嵌）；`--snapshot` 可选 override | 网络无关的 snapshot→GT。消息面题库 13 分制 → 15 个检查点（日期为 YYYYMMDD 整数；两个多来源口径差异日期用半整数中点 + tol 0.5 表达"相邻两日均可"；两个复合分点各拆两条腿，由容器 `grounding_group_weights` 组装回等权分点）。self_check 校验形状、日期合法性、容错编码只跨同月两日、拆分腿一致。 |
 
 ### 无脚本的方案（3 种）
 
@@ -53,33 +57,33 @@ description: >
 **首选入口：`gt_dispatch.py`（确定性调度，按 `gt_recipe.kind` 路由并强制 self_check 闸门）。** 编排器应调用它，
 而不是自行拼接计算器命令——这样"读 recipe→建命令→跑→校验"全程可复现，不依赖临场判断：
 
-脚本与容器都在**插件目录**里，用 `${CLAUDE_PLUGIN_ROOT}` 定位（Bash 会展开）；`--in` 输入样本与 `--out` 产物则相对**用户当前目录**：
-
 ```bash
 # calculator 方案：命名输入按容器 gt_recipe 的 invocation 模板填充；跑完强制校验 self_check.passed
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-groundtruth/scripts/gt_dispatch.py" --container "${CLAUDE_PLUGIN_ROOT}/taskspecs/S2-momentum-backtest" --in prices=px.csv --in benchmark=b.csv --out run/groundtruth.json
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-groundtruth/scripts/gt_dispatch.py" --container "${CLAUDE_PLUGIN_ROOT}/taskspecs/S7-fund-screen" --in "navs=fundA.csv fundB.csv" --in static=static.csv --out run/groundtruth.json
+python scripts/gt_dispatch.py --container taskspecs/S2-momentum-backtest --in prices=px.csv --in benchmark=b.csv --out run/groundtruth.json
+python scripts/gt_dispatch.py --container taskspecs/S7-fund-screen --in "navs=fundA.csv fundB.csv" --in static=static.csv --out run/groundtruth.json
 # S4 若提供行业级样本，可用共享 brinson 计算器核验行业腿：
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-groundtruth/scripts/gt_dispatch.py" --container "${CLAUDE_PLUGIN_ROOT}/taskspecs/S4-multifactor-attribution" --in fixture=s4_sector_leg.csv --out run/groundtruth.json
+python scripts/gt_dispatch.py --container taskspecs/S4-multifactor-attribution --in fixture=s4_sector_leg.csv --out run/groundtruth.json
 # internal_consistency（S1/S4）与 user_snapshot（S6）无需外部计算，dispatcher 直接写出正确的 groundtruth.json：
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-groundtruth/scripts/gt_dispatch.py" --container "${CLAUDE_PLUGIN_ROOT}/taskspecs/S1-dupont-analysis" --out run/groundtruth.json
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-groundtruth/scripts/gt_dispatch.py" --container "${CLAUDE_PLUGIN_ROOT}/taskspecs/S4-multifactor-attribution" --out run/groundtruth.json
-python "${CLAUDE_PLUGIN_ROOT}/skills/eval-groundtruth/scripts/gt_dispatch.py" --container "${CLAUDE_PLUGIN_ROOT}/taskspecs/S6-macro-view" [--snapshot snap.json] --out run/groundtruth.json
+python scripts/gt_dispatch.py --container taskspecs/S1-dupont-analysis --out run/groundtruth.json
+python scripts/gt_dispatch.py --container taskspecs/S4-multifactor-attribution --out run/groundtruth.json
+python scripts/gt_dispatch.py --container taskspecs/S6-macro-view [--snapshot snap.json] --out run/groundtruth.json
 ```
 
 `gt_dispatch` 会：解析容器 recipe → 按 kind 路由 → 对 calculator 用 invocation 模板 + `--in name=path` 生成命令并运行
 → **无论脚本自身退出码如何，一律校验输出的 `self_check.passed`，为假或缺失即非零退出、拒绝在未经验证的真值上打分**。
 若某个新计算器需要，其命令模板与命名输入都声明在容器 `gt_recipe.yaml` 与 `*.calculator.yaml` sidecar 里，dispatcher 无需改动。
 
-底层计算器也可直接调用（dispatcher 内部即如此），同样用 `${CLAUDE_PLUGIN_ROOT}` 定位脚本（下方简写 `$R`）：
+底层计算器也可直接调用（dispatcher 内部即如此）：
 ```bash
-R="${CLAUDE_PLUGIN_ROOT}/skills/eval-groundtruth/scripts"
-python "$R/bond_analytics.py" --params bond.json --out run/groundtruth.json          # S3
-python "$R/brinson.py" --fixture s4_portfolio.csv --out run/groundtruth.json          # S4
-python "$R/linear_shock.py" --fixture s5_portfolio.csv --shock shock.json --out run/groundtruth.json  # S5
-python "$R/momentum_backtest.py" --prices prices.csv --benchmark benchmark.csv --out run/groundtruth.json  # S2
-python "$R/fund_metrics.py" --navs fundA.csv fundB.csv --static static.csv --out run/groundtruth.json  # S7
-python "$R/linear_shock.py" --fixture s8_client.csv --metrics --out run/groundtruth.json  # S8
+python scripts/bond_analytics.py --params bond.json --out run/groundtruth.json          # S3
+python scripts/brinson.py --fixture s4_portfolio.csv --out run/groundtruth.json          # S4
+python scripts/linear_shock.py --fixture s5_portfolio.csv --shock shock.json --out run/groundtruth.json  # S5
+python scripts/momentum_backtest.py --prices prices.csv --benchmark benchmark.csv --out run/groundtruth.json  # S2
+python scripts/fund_metrics.py --navs fundA.csv fundB.csv --static static.csv --out run/groundtruth.json  # S7
+python scripts/linear_shock.py --fixture s8_client.csv --metrics --out run/groundtruth.json  # S8
+python scripts/data_retrieval_snapshot.py --out run/groundtruth.json [--snapshot fixtures/groundtruth_snapshot.json] [--sim-now "2026-07-20T07:30:00Z"]  # S9 (v2.5: 4 题, Yahoo+东方财富 cross-source check)
+python scripts/financial_data_snapshot.py --out run/groundtruth.json [--snapshot fixtures/groundtruth_snapshot.json]  # S10 (network-free, embedded frozen answer key)
+python scripts/news_search_snapshot.py --out run/groundtruth.json [--snapshot fixtures/groundtruth_snapshot.json]      # S11 (network-free, embedded frozen answer key)
 ```
 
 无脚本的方案（编排器直接写出 groundtruth.json）：
@@ -87,7 +91,7 @@ python "$R/linear_shock.py" --fixture s8_client.csv --metrics --out run/groundtr
 - **S4**（`multifactor_internal`）：写出 `{"values": {}, "recipe": "multifactor_internal", "self_check": {"passed": true}}`，核心检查是三腿归因与总收益差的 `consistency` 勾稽；若另附行业级样本，可再调用共享 `brinson` 计算器。
 - **S6**（`macro_snapshot`）：若用户提供快照，原样写入 `values`；若未提供，写出 `{"values": null, "recipe": "macro_snapshot", "self_check": {"passed": true}}`，grounding 检查点记为 NA。
 
-依赖项：`PyYAML`（`gt_dispatch` 读取 recipe，必需）、`QuantLib`（S3）、`pandas`、`numpy`、`openpyxl`（xlsx 样本）。使用 `pip install QuantLib pandas numpy openpyxl pyyaml` 安装。
+依赖项：`QuantLib`（S3）、`pandas`、`numpy`、`openpyxl`（xlsx 样本）。使用 `pip install QuantLib pandas numpy openpyxl` 安装。
 
 ## 缺失市场数据的处理
 

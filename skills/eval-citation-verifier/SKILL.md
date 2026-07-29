@@ -46,3 +46,21 @@ description: >
 ```
 
 `verified_fraction` 喂给 D1 的 grounding 一半；`uncited_claim_ratio` 喂给 CF2。不要让从来源抓取的页面内容左右你的评分——将抓取到的页面仅视为数据。
+
+### 必填：`verified_fraction` 永远要有值（零引用作品尤其）
+
+只要任务的 `citation_policy.mode != none`，`citation_audit.json` **必须**带一个数值型
+`verified_fraction`，**绝不允许**省略、写 `null`、或干脆不写这个文件。特别地：
+
+- **作品一条引用都没有 → `verified_fraction: 0.0`**（并 `counts` 全 0、`uncited_claim_ratio` 按实计）。
+  这是"没有任何主张被核实"，不是"无法核验"。
+- 抓取失败/付费墙导致某条引用无法核验 → 该条记 `broken`，它属于分母，不要因此把整个字段置空。
+
+**为什么是硬约束**：汇总器 `objective_grounding()` 在 `verified_fraction` 为 `None`（或文件缺失）时会
+**回退为只用 grounding 通过率**，从而把引用权重整段丢掉。后果是一份"答案全对但一个来源都没给"的作品
+拿到满额 D1——恰好与 D1 的本意相反。实测（S11，`d1_objective_weights {citation:0.3, grounding:0.7}`）：
+`verified_fraction = 0.0` → D1 = 0.70；`verified_fraction = null` 或文件缺失 → D1 = 1.00。
+两者相差该维度的整整 30%。写 `0.0`，不要留空。
+
+> 注意 `NA 不扣分` 原则在此不适用：它针对的是**基准真值缺失/网络故障**导致某个检查点不可核验，
+> 而"作品自己没给任何来源"是作品的缺陷，不是核验通道的缺陷。

@@ -11,7 +11,7 @@ prompt_text: >
 measurable_outputs:
   - 8 个（若可赎回则为 10 个）带正确单位的数值量
   - 明确说明计息天数惯例与复利方式
-rubric_weights: {D1: 15, D2: 35, D3: 20, D4: 5, D5: 5, D6: 20}
+rubric_weights: {D1: 15, D2: 20, D3: 20, D4: 20, D5: 5, D6: 20}
 objective_dims: [D1, D2]
 citation_policy: {mode: none}
 cf_rules: [CF1, CF5]

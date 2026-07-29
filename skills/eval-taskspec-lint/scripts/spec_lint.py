@@ -3,14 +3,14 @@
 
 Validates every frozen container in taskspecs/registry.json against the constitution's lawful
 surface (rubrics/constitution.md §1) and the tier-coherence rules (README §tier). This is the
-governance gate that lets the flow engines stay task-agnostic: if a container is well-formed here,
+governance gate that lets the engines stay task-agnostic: if a container is well-formed here,
 the engines can consume it mechanically.
 
 Usage:
   python spec_lint.py --root <repo-root>            # lint all registered containers
   python spec_lint.py --root <repo-root> --stamp    # also write container_hash into provenance.json
 
-Exit code 0 iff no ERRORs (WARNs are allowed, e.g. legacy golden: pending).
+Exit code 0 iff no ERRORs (WARNs are allowed).
 """
 import argparse, hashlib, json, os, re, sys
 
@@ -82,8 +82,8 @@ def lint_container(root, entry, r):
     for k in ("task_id", "tier", "version"):
         if str(spec.get(k)) != str(entry.get(k)):
             r.err(f"registry/{k}={entry.get(k)!r} != spec.{k}={spec.get(k)!r}")
-    if str(prov.get("origin")) not in ("legacy-v1", "kb"):
-        r.err(f"provenance.origin must be legacy-v1|kb, got {prov.get('origin')!r}")
+    if str(prov.get("origin")) not in ("legacy-v1",):
+        r.err(f"provenance.origin must be legacy-v1, got {prov.get('origin')!r}")
 
     # --- weights ---
     w = spec.get("rubric_weights", {}) or {}
@@ -150,6 +150,60 @@ def lint_container(root, entry, r):
     if missing_decl:
         r.warn(f"engine_requirements.checkpoint_types missing used types {sorted(missing_decl)}")
 
+    # --- d1_objective_weights (optional override of default 0.6/0.4) ---
+    d1w = spec.get("d1_objective_weights")
+    if d1w is not None:
+        if not isinstance(d1w, dict) or set(d1w.keys()) != {"citation", "grounding"}:
+            r.err(f"d1_objective_weights must have keys {{citation, grounding}}, got {list(d1w.keys()) if isinstance(d1w, dict) else d1w}")
+        else:
+            try:
+                c = float(d1w["citation"]); g = float(d1w["grounding"])
+            except (TypeError, ValueError):
+                r.err(f"d1_objective_weights values must be numeric, got {d1w}")
+            else:
+                if not (0.0 <= c <= 1.0 and 0.0 <= g <= 1.0):
+                    r.err(f"d1_objective_weights values must be in [0,1], got {d1w}")
+                if abs((c + g) - 1.0) > 1e-6:
+                    r.err(f"d1_objective_weights citation+grounding must sum to 1, got {c+g}")
+
+    # --- grounding_group_weights (optional per-prefix weighting of grounding checkpoints) ---
+    ggw = spec.get("grounding_group_weights")
+    if ggw is not None:
+        if not isinstance(ggw, dict) or not ggw:
+            r.err(f"grounding_group_weights must be a non-empty mapping, got {ggw}")
+        else:
+            grounding_fields = [f for f, m in fields.items() if isinstance(m, dict) and m.get("grounding")]
+            for prefix, sub in ggw.items():
+                if not isinstance(sub, dict) or not sub:
+                    r.err(f"grounding_group_weights[{prefix!r}] must be a non-empty mapping {{subfield: weight}}")
+                    continue
+                total = 0.0
+                for subfield, w in sub.items():
+                    try:
+                        wf = float(w)
+                    except (TypeError, ValueError):
+                        r.err(f"grounding_group_weights[{prefix!r}][{subfield!r}] not numeric: {w}")
+                        continue
+                    if not (0.0 <= wf <= 1.0):
+                        r.err(f"grounding_group_weights[{prefix!r}][{subfield!r}] must be in [0,1], got {wf}")
+                    total += wf
+                    full_key = prefix + subfield
+                    if full_key not in fields:
+                        r.warn(f"grounding_group_weights references {full_key!r} which is not in checkpoint_schema")
+                    elif not (fields[full_key].get("grounding") if isinstance(fields[full_key], dict) else False):
+                        r.err(f"grounding_group_weights[{full_key!r}] is not a grounding:true checkpoint")
+                if abs(total - 1.0) > 1e-6:
+                    r.err(f"grounding_group_weights[{prefix!r}] weights must sum to 1, got {total}")
+            # warn if some grounding checkpoints are not covered by any group
+            covered = set()
+            for prefix, sub in ggw.items():
+                for subfield in (sub if isinstance(sub, dict) else {}):
+                    covered.add(prefix + subfield)
+            uncovered = [f for f in grounding_fields if f not in covered]
+            if uncovered and len(ggw) > 0:
+                # Only warn if the groups were meant to be exhaustive; if there's a catch-all like "" it's fine.
+                r.warn(f"grounding checkpoints not covered by grounding_group_weights: {uncovered}")
+
     # --- judge_notes format guard ---
     jn_path = os.path.join(path, "judge_notes.md")
     if not os.path.exists(jn_path):
@@ -160,6 +214,32 @@ def lint_container(root, entry, r):
             m = pat.search(jn)
             if m:
                 r.err(f"judge_notes.md leaks an answer-key value: ...{m.group(0)!r}...")
+
+        # --- two-layer disjointness (objective dims) --------------------------------------------
+        # Split judge_notes into per-dimension sections by "## D<n>" headers, then require every
+        # objective dim to declare the 第一层 / 第二层 split. Rationale: under two-layer scoring the
+        # aggregator subtracts judge (Layer-2) deductions from the measured (Layer-1) base, so an
+        # objective dim whose judge anchors still cover measurable defects would double-count. WARN
+        # (not ERROR) so frozen containers not yet migrated to two-layer still lint clean; promote
+        # to ERROR once all objective-dim containers are migrated.
+        sections, cur = {}, None
+        for line in jn.splitlines():
+            hm = re.match(r"^#{1,4}\s*(D[1-6])\b", line)
+            if hm:
+                cur = hm.group(1); sections[cur] = []
+            elif cur is not None:
+                sections[cur].append(line)
+        for d in obj:
+            body = "\n".join(sections.get(d, []))
+            if not body.strip():
+                r.warn(f"judge_notes.md: objective dim {d} has no section (cannot verify two-layer disjointness)")
+            elif ("第一层" not in body) or ("第二层" not in body):
+                r.warn(f"judge_notes.md: objective dim {d} not structured into 第一层/第二层 — two-layer "
+                       f"disjointness un-declared; judge deductions may double-count Layer-1 measurable defects")
+
+        # --- no additive scoring: an anchor must never map to a positive-signed bonus -----------
+        for m in re.finditer(r"[→=]\s*[＋+]\s*\d", jn):
+            r.err(f"judge_notes.md declares an additive bonus (illegal — deductions only): ...{m.group(0)!r}...")
 
     # --- tier coherence ---
     tier = spec.get("tier")
@@ -183,13 +263,6 @@ def lint_container(root, entry, r):
             r.err(f"T3 requires non-objective weight >=40 (judgment-dominant), got {non_obj_weight}")
     else:
         r.err(f"unknown tier {tier!r} (expected T1|T2|T3)")
-
-    # --- golden gate ---
-    golden = prov.get("golden")
-    if prov.get("origin") == "kb" and golden != "green":
-        r.err("kb-authored container must have golden: green before freeze")
-    elif golden == "pending":
-        r.warn("golden: pending (legacy grandfathered; backfill golden pair before hardening)")
 
     return {"spec": spec, "schema_doc": schema_doc, "gt": gt, "prov": prov, "path": path}
 

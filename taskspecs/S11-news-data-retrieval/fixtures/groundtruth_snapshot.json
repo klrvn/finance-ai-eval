@@ -1,0 +1,52 @@
+{
+  "_comment": "Readable mirror of the frozen answer key embedded in skills/eval-groundtruth/scripts/news_search_snapshot.py (ANSWER_KEY). Optional --snapshot override: pass this file (or the same flat shape) to substitute an updated key without editing the script. Dates are YYYYMMDD integers; the three multi-source-divergence dates are half-integer midpoints whose tol=0.5 window is exactly the two dates the 题库 accepts; 题目三第4点 is a two-consecutive-day vector graded all-or-nothing.",
+  "_source": "S11_GT.md (题库标准答案与判分规则), revised 2026-07-28",
+  "_data_cutoff": "2026-07-27",
+  "_point_scheme": "12 分：题目一 3 + 题目二 3 + 题目三 6",
+  "_field_meta": {
+    "Q1_1_latest_anthropic_model": "题目一-1 Anthropic 最新款大模型 (set_match)",
+    "Q1_2_kimi_k3_pricing_all3": "题目一-2 Kimi K3 API 价格三项全对 (vector, USD/1M token)",
+    "Q1_2_kimi_k3_pricing_set": "题目一-2 Kimi K3 API 价格至少两项正确 (set_match, tol=1)",
+    "Q1_3_waic_editions": "题目一-3 WAIC 已举办届数",
+    "Q2_1_acquisition_completion_date": "题目二-1 完成股份收购公告日 (YYYYMMDD)",
+    "Q2_2_revenue_commitment_3y": "题目二-2 2026-2028 三年累计含税营收承诺下限 (亿元)",
+    "Q2_3_deal_terms": "题目二-3 交易金额 (亿元) + 最终持股比例 (%), 全对才给分 (vector)",
+    "Q3_1_epic_fury_order_date": "题目三-1 下令执行 Operation Epic Fury (YYYYMMDD, 无容错)",
+    "Q3_2_two_week_ceasefire_date": "题目三-2 接受两周临时停火安排 (YYYYMMDD, 双日容错)",
+    "Q3_3_strait_reopen_announced_date": "题目三-3 伊朗宣布有条件重新开放海峡航运 (YYYYMMDD, 无容错)",
+    "Q3_4_islamabad_talks_window": "题目三-4 美伊伊斯兰堡会谈两日日期 (vector, 两日全对才给分, 无容错)",
+    "Q3_5_mou_signed_date": "题目三-5 美伊总统签署谅解备忘录 (YYYYMMDD, 双日容错)",
+    "Q3_6_truce_declared_over_date": "题目三-6 宣布休战安排结束 (YYYYMMDD, 双日容错)"
+  },
+  "values": {
+    "Q1_1_latest_anthropic_model": [
+      "Opus 5"
+    ],
+    "Q1_2_kimi_k3_pricing_all3": {
+      "input_cache_hit": 0.3,
+      "input_cache_miss": 3.0,
+      "output": 15.0
+    },
+    "Q1_2_kimi_k3_pricing_set": [
+      "0.30",
+      "3.00",
+      "15.00"
+    ],
+    "Q1_3_waic_editions": 9,
+    "Q2_1_acquisition_completion_date": 20260714,
+    "Q2_2_revenue_commitment_3y": 12.0,
+    "Q2_3_deal_terms": {
+      "deal_amount_yi_cny": 4.78,
+      "stake_pct": 60
+    },
+    "Q3_1_epic_fury_order_date": 20260228,
+    "Q3_2_two_week_ceasefire_date": 20260407.5,
+    "Q3_3_strait_reopen_announced_date": 20260417,
+    "Q3_4_islamabad_talks_window": {
+      "talks_start": 20260611,
+      "talks_end": 20260612
+    },
+    "Q3_5_mou_signed_date": 20260617.5,
+    "Q3_6_truce_declared_over_date": 20260707.5
+  }
+}

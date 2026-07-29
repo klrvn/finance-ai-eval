@@ -1,0 +1,58 @@
+{
+  "snapshot_date": "2026-07-17",
+  "data_cutoff_note": "A股/港股: 2026-07-17 收盘价(实时行情接口获取); 沪深300全收益指数: 2026-07-16(历史接口1天延迟,07-17为估算)。v2.5: 原 Q5(10年期美债收益率)随该题删除。",
+  "year_start_base": "2025-12-31",
+  "questions": {
+    "Q1": {
+      "title": "智谱年初到今天涨了多少",
+      "ticker": "02513.HK",
+      "market": "HK",
+      "adjustment": "前复权",
+      "base_date": "2026-01-08",
+      "base_note": "智谱于2026-01-08港交所上市，2025-12-31时尚未上市，基准取上市首日前复权价",
+      "base_price": 131.50,
+      "latest_date": "2026-07-17",
+      "latest_price": 1107.00,
+      "return_pct": 741.83,
+      "data_source": "EquityApi.get_hist_adjusted_price(基准价), EquityMarketRTApi.get_last_quote(最新价), 日历: HK"
+    },
+    "Q2": {
+      "title": "贵州茅台今年以来的收益率",
+      "ticker": "600519.SH",
+      "market": "SSE",
+      "adjustment": "前复权",
+      "base_date": "2025-12-31",
+      "base_price": 1345.34,
+      "latest_date": "2026-07-17",
+      "latest_price": 1253.00,
+      "return_pct": -6.86,
+      "data_source": "EquityApi.get_hist_adjusted_price(基准价), EquityMarketRTApi.get_last_quote(最新价), 日历: SSE"
+    },
+    "Q3": {
+      "title": "沪深300全收益指数今年到现在的涨跌幅",
+      "ticker": "H00300.CSI",
+      "market": "CSI",
+      "adjustment": "不适用",
+      "adjustment_note": "全收益指数已含分红再投资，无需复权",
+      "base_date": "2025-12-31",
+      "base_price": 6826.62,
+      "latest_date": "2026-07-17",
+      "latest_note": "H00300.CSI历史接口有约1天延迟，07-17数据尚未入库。据000300.SH实时收盘跌幅-3.60%估算: 7018.51×(1-3.60%)≈6765.84。注意：全收益指数含分红再投资，实际跌幅可能与000300.SH略有差异，此为近似估算值。",
+      "latest_price": 6765.84,
+      "return_pct": -0.89,
+      "data_source": "IndexApi.get_hist_price(基准价+7月16日值), EquityMarketRTApi.get_last_quote(000300.SH实时跌幅), 日历: SSE"
+    },
+    "Q4": {
+      "title": "华安黄金ETF年初至今涨了多少",
+      "ticker": "518880.SH",
+      "market": "SSE",
+      "adjustment": "后复权",
+      "base_date": "2025-12-31",
+      "base_price": 9.301,
+      "latest_date": "2026-07-17",
+      "latest_price": 8.311,
+      "return_pct": -10.64,
+      "data_source": "FundApi.get_hist_adjusted_price(基准价), EquityMarketRTApi.get_last_quote(最新价), 日历: SSE"
+    }
+  }
+}

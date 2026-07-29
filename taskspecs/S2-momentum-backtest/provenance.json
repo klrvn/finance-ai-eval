@@ -1,17 +1,49 @@
 {
   "task_id": "S2",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "origin": "legacy-v1",
-  "authored_by": "hand-migration from skills/eval-task-specs/references/tasks.md (S2 block)",
-  "kb_cards": [],
-  "method_evidence": "Legacy reference task. Methodology: 12-1 动量、月度再平衡、等权回测；NAV 复现防护（CF3）. To be backfilled with KB card citations when the quant-backtest family card is authored.",
+  "authored_by": "hand-migration from skills/eval-task-specs/references/tasks.md (S2 block); v1.1.0: removed CF5, added deviation scoring for D1/D2 objective dims; v1.2.0: replaced prompt_text with full unambiguous spec from alphamind-eval-skills/tasks/S2-quant-strategy-backtest.md (detailed strategy spec, implementation conventions, stock filters, NAV walkthrough, turnover/cost formula, ground rules, quick reference)",
+  "method_evidence": "Legacy reference task. Methodology: 12-1 动量、月度再平衡、等权回测；NAV 复现防护（CF3）. v1.2.0 adds explicit unambiguous spec: PIT membership rules, stock filters (停牌/ST/*ST/涨跌停/历史不足), NAV daily walkthrough formula, two-sided turnover cost deduction (NAV × (1 - turnover × 0.002)).",
   "engine_versions": {
     "grader": "1.0",
     "aggregator": "2.0",
     "extractor": "1.0"
   },
   "review_status": "frozen",
-  "golden": "pending",
-  "container_hash": "330dcd6709f8b611",
-  "notes": "container_hash stamped by eval-taskspec-lint --stamp."
+  "container_hash": "03358aa6f56ce4ac",
+  "notes": "v1.0.0: container_hash stamped by eval-taskspec-lint --stamp. v1.1.0: removed CF5 from cf_rules, added objective_scoring_mode: deviation with per-field deviation_scoring.max_dev in checkpoint_schema. Engine scripts (grade_checkpoints.py, aggregate.py) extended to support --scoring-mode deviation. Constitution layer NOT modified. v1.2.0: prompt_text expanded to full unambiguous specification from S2-quant-strategy-backtest.md; measurable_outputs refined; required_inputs enhanced with data-source notes; judge_notes.md updated with stock-filter, cost-formula, and NAV-walkthrough anchors.",
+  "data_provisioned": {
+    "date": "2026-07-14",
+    "fixtures_dir": "fixtures",
+    "prices_csv": {
+      "tickers": 499,
+      "trading_days": 1699,
+      "date_range": "2018-01-02 ~ 2024-12-31",
+      "adjustment": "后复权收盘价",
+      "sha256_prefix": "acaab5b47c0be734"
+    },
+    "benchmark_csv": {
+      "rows": 1473,
+      "date_range": "2019-01-01 ~ 2024-12-31",
+      "index": "CSI 300 Total Return (H00300)"
+    },
+    "membership_csv": {
+      "dates": 72,
+      "date_range": "2019-01-31 ~ 2024-12-31",
+      "tickers_per_date": 300
+    },
+    "groundtruth": {
+      "self_check_passed": true,
+      "n_days": 1455,
+      "n_rebalances": 41,
+      "values": {
+        "ann_return": 0.068892,
+        "ann_vol": 0.197569,
+        "sharpe": 0.4362,
+        "max_drawdown": -0.390329,
+        "ann_excess_return": -0.004145,
+        "avg_monthly_turnover": 0.564007
+      }
+    }
+  }
 }

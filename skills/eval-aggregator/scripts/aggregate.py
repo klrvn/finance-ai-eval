@@ -31,7 +31,7 @@ DIM_DESC = {
     "D3": "提示要求的所有交付物是否实际存在并已计算",
     "D4": "推理深度、驱动因素和风险识别是否正确",
     "D5": "推荐是否具体、可决策、适合所述用户",
-    "D6": "数据获取与计算是否经恰当的外部工具链：金融专用API > 通用结构化来源 > 野网页抓取 > 凭记忆；计算是否有执行轨迹",
+    "D6": "计算是否经恰当的外部工具链（代码/工具）执行且有轨迹；工具链覆盖是否完整；调用失败后是否妥善处理。D6 只评工具使用行为，不评数据来源层级",
 }
 
 LEVEL_LABELS = {0: "不及格", 1: "较差", 2: "合格", 3: "良好", 4: "优秀"}
@@ -49,13 +49,31 @@ def lvl_label(lvl):
     return LEVEL_LABELS.get(min(4, max(0, int(lvl))), "?")
 
 
-def effective_levels(judge):
-    """Deduction ledger is the source of truth: level = 4 - sum(points), floor 0.
-    Falls back to a plain stated level for legacy judge files without ledgers."""
+def effective_levels(judge, sink=None):
+    """Deduction ledger is the source of truth: level = 4 - sum(points), clamped to [0, 4].
+    Falls back to a plain stated level for legacy judge files without ledgers.
+
+    The upper clamp guards against ledger sign bugs (a negative `points` value would otherwise
+    push the level above 4 and inflate the dimension score past 100% of its weight). Deduction
+    `points` are a positive magnitude by convention (see the lint `points >= 0` rule).
+
+    `sink`, if given, is a list that collects human-readable validation warnings: individual
+    negative points (which violate the positive-magnitude convention) and any case where the
+    raw level fell outside [0, 4] and had to be clamped (the sign-bug signature). Clamping keeps
+    the score sound; the warning surfaces the underlying ledger defect for review/lint."""
     levels = dict(judge.get("levels", {}) or {})
     for d, items in (judge.get("deductions", {}) or {}).items():
-        pts = sum((it.get("points") or 0) for it in (items or []))
-        levels[d] = max(0.0, 4.0 - pts)
+        raw_pts = [(it.get("points") or 0) for it in (items or [])]
+        if sink is not None:
+            for it, p in zip((items or []), raw_pts):
+                if p < 0:
+                    sink.append(f"{d}: 负扣分点数 {p:g}（『{it.get('issue', '?')}』）——扣分应为正数量级，已按下限处理")
+        pts = sum(raw_pts)
+        raw_level = 4.0 - pts
+        clamped = min(4.0, max(0.0, raw_level))
+        if sink is not None and raw_level > 4.0 + 1e-9:
+            sink.append(f"{d}: 扣分合计为负使原始等级达 {raw_level:.2f}（>4），已钳到 4——疑似账本符号错误")
+        levels[d] = clamped
     return levels
 
 
@@ -77,12 +95,95 @@ def fmt_judge_detail(j):
     return j.get("rationale") or "无理由"
 
 
-def objective_grounding(det, cit, has_policy):
+def _grouped_grounding_fraction(det, schema, ggw):
+    """Compute a weighted grounding pass fraction using grounding_group_weights config.
+
+    ggw: {prefix: {subfield: weight}} e.g. {"Q1_": {"base_price": 0.4, "latest_price": 0.4, "answer": 0.2}}
+    Each checkpoint's contribution = its weight within its group. Groups are averaged equally
+    (each group's weighted pass-rate contributes 1/n_groups), so no group dominates.
+    Checkpoints not covered by any group fall back to equal weight among themselves.
+    Returns None if no grounding checkpoints were graded.
+    """
+    cps = det.get("checkpoints", {}) or {}
+    grounding_fields = [f for f, m in (schema or {}).items() if isinstance(m, dict) and m.get("grounding")]
+    if not grounding_fields:
+        return None
+    # Build the set of grounding checkpoints that were actually graded (not NA)
+    graded = [f for f in grounding_fields if f in cps and cps[f].get("result") in ("pass", "fail")]
+    if not graded:
+        return None
+    # Partition into groups per ggw config
+    grouped = {}      # prefix -> {full_key: weight}
+    covered = set()
+    for prefix, sub in (ggw or {}).items():
+        grouped[prefix] = {prefix + sf: float(w) for sf, w in (sub or {}).items()}
+        covered.update(grouped[prefix].keys())
+    # Ungrouped grounding checkpoints (not covered by any group)
+    ungrouped = [f for f in grounding_fields if f not in covered and f in graded]
+
+    group_rates = []  # each group's weighted pass-rate
+    for prefix, kw in grouped.items():
+        # only count this group's checkpoints that were actually graded
+        present_graded = {f: w for f, w in kw.items() if f in graded}
+        if not present_graded:
+            continue  # group not represented in this work -> skip, don't count as 0
+        wsum = sum(present_graded.values())
+        if wsum <= 0:
+            continue
+        passed_w = sum(w for f, w in present_graded.items() if cps[f].get("result") == "pass")
+        group_rates.append(passed_w / wsum)
+    # ungrouped: equal-weight pass rate
+    if ungrouped:
+        passed_u = sum(1 for f in ungrouped if cps[f].get("result") == "pass")
+        group_rates.append(passed_u / len(ungrouped))
+    if not group_rates:
+        return None
+    return sum(group_rates) / len(group_rates)
+
+
+def objective_grounding(det, cit, has_policy, taskspec=None, schema=None):
+    """Compute D1's objective fraction.
+
+    In deviation scoring mode (det.scoring_mode == 'deviation'), prefer the continuous
+    grounding_deviation_fraction over the binary grounding_pass_fraction.
+
+    taskspec may carry:
+      - d1_objective_weights: {citation: x, grounding: y} overriding default 0.6/0.4
+      - grounding_group_weights: {prefix: {subfield: weight}} to compute a weighted
+        grounding pass fraction (instead of the grader's equal-weight gpf)
+    """
+    cw = 0.6; gw = 0.4
+    if taskspec and isinstance(taskspec.get("d1_objective_weights"), dict):
+        d = taskspec["d1_objective_weights"]
+        try:
+            cw = float(d.get("citation", 0.6)); gw = float(d.get("grounding", 0.4))
+        except (TypeError, ValueError):
+            cw, gw = 0.6, 0.4
+    ggw = (taskspec or {}).get("grounding_group_weights") if isinstance(taskspec, dict) else None
+    schema_obj = schema or (taskspec or {}).get("checkpoint_schema") or {}
+    # Deviation mode: use continuous fractions if available
+    if det.get("scoring_mode") == "deviation":
+        gdf = det.get("grounding_deviation_fraction")
+        if gdf is not None:
+            # prefer weighted grouped fraction if configured, else fall back to gdf
+            weighted = _grouped_grounding_fraction(det, schema_obj, ggw) if ggw else None
+            gpf_eff = weighted if weighted is not None else gdf
+            if has_policy and cit:
+                vf = cit.get("verified_fraction")
+                if vf is not None:
+                    return cw * vf + gw * gpf_eff
+            return gpf_eff
+    # Binary mode (default)
     gpf = det.get("grounding_pass_fraction")
+    # Override with weighted grouped fraction if the container configured one
+    if ggw:
+        weighted = _grouped_grounding_fraction(det, schema_obj, ggw)
+        if weighted is not None:
+            gpf = weighted
     if has_policy and cit:
         vf = cit.get("verified_fraction")
         if vf is not None and gpf is not None:
-            return 0.6 * vf + 0.4 * gpf
+            return cw * vf + gw * gpf
         if vf is not None:
             return vf
     if gpf is not None:
@@ -123,15 +224,25 @@ def build_dim_summary(d, dims, det, cit, cf_applied_list):
 
     if src == "objective" and d == "D1":
         od = info.get("objective_detail", {})
-        parts.append(f"客观依据：grounding_objective={od.get('grounding_objective', '-')}, "
-                      f"引用核验率={od.get('verified_fraction', '-')}, "
-                      f"grounding检查点通过率={od.get('grounding_pass_fraction', '-')}")
+        if det.get("scoring_mode") == "deviation":
+            parts.append(f"客观依据：偏差评分模式 grounding_deviation={od.get('grounding_objective', '-')}, "
+                         f"grounding偏差分={det.get('grounding_deviation_fraction', '-')}")
+        else:
+            parts.append(f"客观依据：grounding_objective={od.get('grounding_objective', '-')}, "
+                         f"引用核验率={od.get('verified_fraction', '-')}, "
+                         f"grounding检查点通过率={od.get('grounding_pass_fraction', '-')}")
         failed = od.get("failed_checkpoints")
         if failed:
             parts.append(f"扣分来源（未通过检查点）：{', '.join(failed)}")
     elif src == "objective" and d == "D2":
         od = info.get("objective_detail", {})
-        parts.append(f"客观依据：方法论检查点通过率={od.get('methodology_pass_fraction') if od.get('methodology_pass_fraction') is not None else od.get('pass_fraction', '-')}")
+        if det.get("scoring_mode") == "deviation":
+            basis_val = od.get("methodology_deviation_fraction", od.get('methodology_pass_fraction'))
+            parts.append(f"客观依据：偏差评分模式 methodology偏差分={basis_val if basis_val is not None else '-'}")
+        else:
+            basis = od.get('methodology_pass_fraction')
+            parts.append(f"客观依据：方法论检查点通过率="
+                         f"{basis if basis is not None else od.get('pass_fraction', '-')}")
         failed = od.get("failed_checkpoints")
         if failed:
             parts.append(f"扣分来源（未通过检查点）：{', '.join(failed)}")
@@ -159,13 +270,24 @@ def score_work(bundle, taskspec, out):
     has_policy = taskspec.get("citation_policy", {}).get("mode", "none") != "none"
     schema = taskspec.get("checkpoint_schema", {}) or {}
 
-    l1, l2 = effective_levels(j1), effective_levels(j2)
+    w1, w2 = [], []
+    l1 = effective_levels(j1, sink=w1)
+    l2 = effective_levels(j2, sink=w2)
+    ledger_warnings = [f"judge_1 {m}" for m in w1] + [f"judge_2 {m}" for m in w2]
     ded1, ded2 = j1.get("deductions", {}) or {}, j2.get("deductions", {}) or {}
     r1, r2 = j1.get("rationale", {}), j2.get("rationale", {})
     e1, e2 = j1.get("evidence", {}), j2.get("evidence", {})
-    grounding_obj = objective_grounding(det, cit, has_policy)
+    grounding_obj = objective_grounding(det, cit, has_policy, taskspec=taskspec, schema=schema)
     pass_frac = det.get("pass_fraction")
-    meth_frac = det.get("methodology_pass_fraction")
+    # In deviation mode, prefer continuous fractions over binary ones
+    if det.get("scoring_mode") == "deviation":
+        meth_frac = det.get("methodology_deviation_fraction")
+        if meth_frac is None:
+            meth_frac = det.get("methodology_pass_fraction")
+        if meth_frac is None:
+            meth_frac = det.get("deviation_fraction")
+    else:
+        meth_frac = det.get("methodology_pass_fraction")
     gpf = det.get("grounding_pass_fraction")
     vf = cit.get("verified_fraction") if cit else None
 
@@ -198,43 +320,69 @@ def score_work(bundle, taskspec, out):
             "summary": "",
         }
 
+        # ---- Two-layer scoring ----------------------------------------------------------------
+        # Layer 2 (扣分锚点, compulsory): the two judges' non-measurable deductions for this dim,
+        # as points off 4, averaged. Derived from effective levels so both ledger and legacy
+        # judge files work. Layer 1 (optional GT base): the measured fraction for objective dims,
+        # None otherwise. Combine subtractively: dim_fraction = max(0, L1_frac - L2_points/4),
+        # where L1_frac defaults to 1.0 (full base) for non-objective dims -> pure deduction,
+        # exactly today's behavior.
+        both_j = (d in l1) and (d in l2)
+        if both_j:
+            l2_points = ((4.0 - l1[d]) + (4.0 - l2[d])) / 2.0
+            judge_divergence = abs(l1[d] - l2[d]) > 1
+        else:
+            l2_points = 0.0
+            judge_divergence = False
+
+        l1_frac = None   # Layer-1 measured base (None = no GT base for this dim)
         if d in objective:
             if d == "D1":
-                frac = grounding_obj
+                l1_frac = grounding_obj
                 entry["objective_detail"] = {
                     "grounding_objective": round(grounding_obj, 4) if grounding_obj is not None else None,
                     "verified_fraction": round(vf, 4) if vf is not None else None,
                     "grounding_pass_fraction": round(gpf, 4) if gpf is not None else None,
+                    "grounding_deviation_fraction": round(det.get("grounding_deviation_fraction"), 4) if det.get("grounding_deviation_fraction") is not None else None,
+                    "scoring_mode": det.get("scoring_mode", "binary"),
                     "failed_checkpoints": failed_grounding,
+                    "layer1_fraction": round(l1_frac, 4) if l1_frac is not None else None,
+                    "layer2_deduction_points": round(l2_points, 3),
                 }
             elif d == "D2":
                 # D2 is methodology: prefer methodology-tagged checkpoints, else fall back to overall.
-                frac = meth_frac if meth_frac is not None else pass_frac
+                l1_frac = meth_frac if meth_frac is not None else pass_frac
                 entry["objective_detail"] = {
                     "methodology_pass_fraction": round(meth_frac, 4) if meth_frac is not None else None,
+                    "methodology_deviation_fraction": round(det.get("methodology_deviation_fraction"), 4) if det.get("methodology_deviation_fraction") is not None else None,
                     "pass_fraction": round(pass_frac, 4) if pass_frac is not None else None,
-                    "basis": "methodology_pass_fraction" if meth_frac is not None else "pass_fraction",
+                    "basis": "methodology_deviation_fraction" if (det.get("scoring_mode") == "deviation" and det.get("methodology_deviation_fraction") is not None) else ("methodology_pass_fraction" if meth_frac is not None else "pass_fraction"),
+                    "scoring_mode": det.get("scoring_mode", "binary"),
                     "failed_checkpoints": failed_methodology if meth_frac is not None else failed_all,
+                    "layer1_fraction": round(l1_frac, 4) if l1_frac is not None else None,
+                    "layer2_deduction_points": round(l2_points, 3),
                 }
-            frac = frac if (frac is not None) else None
-            lvl = round(4 * frac) if frac is not None else None
 
-            if lvl is None and d in l1 and d in l2:      # objective metric unavailable -> judges
-                lvl = (l1[d] + l2[d]) / 2.0
-                frac = lvl / 4.0
-                entry["source"] = "judge_mean_fallback"
-                entry["needs_review"] = abs(l1[d] - l2[d]) > 1
-            else:
-                entry["source"] = "objective"
+        if d in objective and l1_frac is not None:
+            # Layer 1 (measured base) minus Layer 2 (non-measurable 扣分锚点).
+            frac = max(0.0, l1_frac - l2_points / 4.0)
+            lvl = round(4.0 * frac, 2)
+            entry["source"] = "layer1+layer2"
+            entry["needs_review"] = judge_divergence
+        elif d in objective and both_j:
+            # Objective metric unavailable -> fall back to the judges' Layer-2 ledger alone.
+            lvl = (l1[d] + l2[d]) / 2.0
+            frac = max(0.0, lvl / 4.0)
+            entry["source"] = "judge_mean_fallback"
+            entry["needs_review"] = judge_divergence
+        elif both_j:
+            # Non-objective dim: Layer 2 only (L1_frac implicitly 1.0).
+            lvl = (l1[d] + l2[d]) / 2.0
+            frac = max(0.0, lvl / 4.0)
+            entry["source"] = "judge_mean"
+            entry["needs_review"] = judge_divergence
         else:
-            a, b = l1.get(d), l2.get(d)
-            if a is None or b is None:
-                entry["source"] = "judge_missing"
-            else:
-                lvl = (a + b) / 2.0
-                frac = lvl / 4.0
-                entry["source"] = "judge_mean"
-                entry["needs_review"] = abs(a - b) > 1
+            entry["source"] = "judge_missing"
 
         entry["level"] = lvl
         entry["fraction"] = round(frac, 4) if frac is not None else None
@@ -341,6 +489,7 @@ def score_work(bundle, taskspec, out):
         "cf_applied": [f["rule"] for f in cf_applied],
         "cf_pending_human": cf_pending,
         "needs_review_dims": [d for d in DIMS if dims[d]["needs_review"]],
+        "ledger_warnings": ledger_warnings,
         "headline": headline,
         "bundle_dir": bundle,
     }
@@ -354,12 +503,34 @@ def score_work(bundle, taskspec, out):
         print(f"  ⚠ 未能评分的维度（已从分母剔除）：{unscored_dims}")
     if cf_pending:
         print(f"  ⚠ 待人工确认：{[f['rule'] for f in cf_pending]}")
+    for m in ledger_warnings:
+        print(f"  ⚠ 账本校验：{m}", file=sys.stderr)
+
+
+def _load_work_excerpts(cards):
+    """Load normalized.json from each card's bundle dir and build a per-work lookup of
+    field evidence excerpts (the verbatim span from the student answer that the extractor
+    captured for each checkpoint field).
+
+    Returns: {work_label: {checkpoint_field: evidence_text, ...}, ...}
+    Also returns: {work_label: {checkpoint_field: full_extracted_field_meta, ...}} for fallback.
+    """
+    excerpts = {}
+    for c in cards:
+        wl = c["work_label"]
+        norm = load(os.path.join(c.get("bundle_dir", ""), "normalized.json"), {})
+        field_ev = {}
+        for field, meta in (norm.get("extracted", {}) or {}).items():
+            if isinstance(meta, dict) and meta.get("evidence"):
+                field_ev[field] = meta["evidence"]
+        excerpts[wl] = field_ev
+    return excerpts
 
 
 def report(cards_paths, out):
     """Unified report: identical format for 1..N works.
     Sections: score & ranking table -> per-dim overview -> detailed D1-D6 grading for every
-    work (deduction ledgers with evidence) -> checkpoints -> citations & CF -> verdict."""
+    work (deduction ledgers with evidence + student answer excerpts) -> checkpoints -> citations & CF -> verdict."""
     cards = [load(p) for p in cards_paths]
     cards.sort(key=lambda c: c.get("score", 0), reverse=True)
     lines = ["# 评测报告", ""]
@@ -395,17 +566,20 @@ def report(cards_paths, out):
             tag = "*" if info.get("needs_review") else ""
             cap = f" [封顶:{info.get('capped_by')}]" if info.get("capped_by") else ""
             lvl_str = "NA" if lv is None else f"{lv:g}{tag}"
-            src_tag = {"objective": "客观", "judge_mean": "盲评", "judge_mean_fallback": "盲评(回退)",
-                       "judge_missing": "缺失"}.get(src, src[:4])
+            src_tag = {"objective": "客观", "layer1+layer2": "两层", "judge_mean": "盲评",
+                       "judge_mean_fallback": "盲评(回退)", "judge_missing": "缺失"}.get(src, src[:4])
             row.append(f"{lvl_str} ({src_tag}){cap}")
         lines.append("| " + " | ".join(row) + " |")
     lines.append("| **总分 /100** | " + " | ".join(f"**{c['score']:g}**" for c in cards) + " |")
-    lines.append("\n`*` = 两位评分官分歧超过一级（需复核）。`(客观)` = 由实测数值推导，`(盲评)` = 由盲评扣分账本均值。\n")
+    lines.append("\n`*` = 两位评分官分歧超过一级（需复核）。`(两层)` = 第一层实测基线 − 第二层扣分锚点，"
+                 "`(盲评)` = 纯第二层扣分账本均值（无 GT 基线），`(盲评(回退))` = 客观指标缺失时退回盲评。\n")
 
-    # --- 3. Detailed grading per dimension per work (deduction ledgers) ---
+    # --- 3. Detailed grading per dimension per work (deduction ledgers + answer excerpts) ---
+    work_excerpts = _load_work_excerpts(cards)
     lines += ["## 各维度详细评分（D1-D6）",
               "",
-              "每个维度从 4 分（满分）起评；下列每一笔扣分都对应一条有证据的缺陷记录。", ""]
+              "每个维度从 4 分（满分）起评；下列每一笔扣分都对应一条有证据的缺陷记录。",
+              "每个维度末尾附学生答案原文引用，方便快速定位答案中的对应位置。", ""]
     for d in DIMS:
         name = DIM_NAMES[d]
         lines.append(f"### {d} — {name}")
@@ -431,18 +605,33 @@ def report(cards_paths, out):
             od = info.get("objective_detail")
             if od:
                 if d == "D1":
-                    lines.append(f"- 客观依据：grounding_objective={od.get('grounding_objective', '-')}, "
-                                  f"引用核验率={od.get('verified_fraction', '-')}, "
-                                  f"grounding通过率={od.get('grounding_pass_fraction', '-')}")
+                    if od.get("scoring_mode") == "deviation":
+                        lines.append(f"- 客观依据：偏差评分模式 grounding_deviation={od.get('grounding_objective', '-')}, "
+                                      f"grounding偏差分={od.get('grounding_deviation_fraction', '-')}")
+                    else:
+                        lines.append(f"- 客观依据：grounding_objective={od.get('grounding_objective', '-')}, "
+                                      f"引用核验率={od.get('verified_fraction', '-')}, "
+                                      f"grounding通过率={od.get('grounding_pass_fraction', '-')}")
                 elif d == "D2":
-                    basis = od.get('methodology_pass_fraction')
-                    lines.append(f"- 客观依据：方法论检查点通过率="
-                                  f"{basis if basis is not None else od.get('pass_fraction', '-')}")
+                    if od.get("scoring_mode") == "deviation":
+                        basis_val = od.get('methodology_deviation_fraction', od.get('methodology_pass_fraction'))
+                        lines.append(f"- 客观依据：偏差评分模式 methodology偏差分="
+                                      f"{basis_val if basis_val is not None else od.get('pass_fraction', '-')}")
+                    else:
+                        basis = od.get('methodology_pass_fraction')
+                        lines.append(f"- 客观依据：方法论检查点通过率="
+                                      f"{basis if basis is not None else od.get('pass_fraction', '-')}")
                 failed = od.get("failed_checkpoints")
                 if failed:
                     lines.append(f"- 扣分来源（未通过检查点）：{', '.join(failed)}")
-                elif info.get("source") == "objective":
+                elif info.get("source") in ("objective", "layer1+layer2"):
                     lines.append("- 无扣分来源：可核验检查点全部通过")
+                if info.get("source") == "layer1+layer2" and od.get("layer1_fraction") is not None:
+                    l1f = od.get("layer1_fraction")
+                    l2p = od.get("layer2_deduction_points", 0) or 0
+                    frac_val = info.get("fraction")
+                    lines.append(f"- 两层计分：第一层实测基线 {l1f:g} − 第二层扣分锚点 {l2p/4.0:g}"
+                                 f"（{l2p:g} 点/4）= 维度分数 {frac_val if frac_val is not None else '-'}")
 
             for jkey, jname in (("judge_1", "评分官1"), ("judge_2", "评分官2")):
                 j = info.get(jkey, {})
@@ -461,6 +650,35 @@ def report(cards_paths, out):
             ev = (info.get("judge_1", {}) or {}).get("evidence") or (info.get("judge_2", {}) or {}).get("evidence")
             if ev:
                 lines.append(f"- 证据引用：\"{ev}\"")
+
+            # --- Student answer excerpts: verbatim quotes from the work for this dimension ---
+            excerpts = []
+            wl = c["work_label"]
+            # Objective dims: excerpts from failed checkpoint fields
+            if od:
+                failed = od.get("failed_checkpoints") or []
+                for field in failed:
+                    ex_text = work_excerpts.get(wl, {}).get(field)
+                    if ex_text:
+                        excerpts.append({"label": f"检查点 {field}（未通过）", "quote": ex_text})
+            # Subjective dims: excerpts from judge deduction evidence
+            for jkey in ("judge_1", "judge_2"):
+                j = info.get(jkey, {}) or {}
+                for it in (j.get("deductions") or []):
+                    ev_text = it.get("evidence")
+                    if ev_text:
+                        issue = it.get("issue", "?")
+                        # Deduplicate: same evidence text may appear in both judges
+                        if not any(e["quote"] == ev_text for e in excerpts):
+                            excerpts.append({"label": f"盲评扣分：{issue}", "quote": ev_text})
+            if excerpts:
+                lines.append("")
+                lines.append(f"> **学生答案原文引用（{c['work_label']} · {d}）**")
+                for ex in excerpts:
+                    quote = ex["quote"]
+                    lines.append(f">")
+                    lines.append(f"> `{ex['label']}`：")
+                    lines.append(f"> {quote}")
             lines.append("")
 
     # --- 4. Deterministic checkpoints ---

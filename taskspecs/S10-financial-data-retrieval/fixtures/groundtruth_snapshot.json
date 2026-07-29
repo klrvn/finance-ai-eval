@@ -1,0 +1,46 @@
+{
+  "_note": "Readable mirror of the frozen answer key embedded in financial_data_snapshot.py. Values sourced from company filings; net_profit=归母净利润, roe=加权净资产收益率, inventory=存货期末余额. Pass this file via --snapshot to override the embedded key (same nested shape).",
+  "data_cutoff": "2026-07-20",
+  "rounding": "net_profit/inventory -> 2 decimals; roe -> 2 decimals of percent",
+  "companies": {
+    "ZTE": {
+      "name": "中兴通讯",
+      "identifier": "000063.SZ",
+      "listing": "A股/深交所",
+      "currency": "CNY",
+      "unit": "亿元",
+      "fiscal_year_end": "自然年 (12-31)",
+      "years": {
+        "2023": {"net_profit": 93.26, "roe": 15.19, "inventory": 411.31},
+        "2024": {"net_profit": 84.25, "roe": 11.97, "inventory": 412.58},
+        "2025": {"net_profit": 56.18, "roe": 7.58, "inventory": 470.17}
+      }
+    },
+    "POPMART": {
+      "name": "泡泡玛特",
+      "identifier": "09992.HK",
+      "listing": "港股/港交所",
+      "currency": "CNY",
+      "unit": "亿元",
+      "fiscal_year_end": "自然年 (12-31)",
+      "years": {
+        "2023": {"net_profit": 10.82, "roe": 14.69, "inventory": 9.05},
+        "2024": {"net_profit": 31.25, "roe": 33.87, "inventory": 15.25},
+        "2025": {"net_profit": 127.76, "roe": 77.52, "inventory": 54.73}
+      }
+    },
+    "NVDA": {
+      "name": "英伟达",
+      "identifier": "NVDA.O",
+      "listing": "美股/纳斯达克",
+      "currency": "USD",
+      "unit": "亿美元",
+      "fiscal_year_end": "财年1月末结束 (FY2025 结束于 2025-01)",
+      "years": {
+        "2023": {"net_profit": 43.68, "roe": 17.93, "inventory": 51.59},
+        "2024": {"net_profit": 297.60, "roe": 91.46, "inventory": 52.82},
+        "2025": {"net_profit": 728.80, "roe": 119.18, "inventory": 100.80}
+      }
+    }
+  }
+}
