@@ -1,8 +1,12 @@
 # S10 三家公司三年财务数据获取 — 检查点 schema
 #
-# 27 个数值检查点 = 3 家公司 × 3 财年 (2023/2024/2025) × 3 指标
+# 27 个数值检查点 = 3 家公司 × 3 财年 × 3 指标
 #   (net_profit 归母净利润 / roe 加权净资产收益率 / inventory 存货期末余额)。
 #   命名: <COMPANY>_<FY>_<METRIC>, COMPANY ∈ {ZTE, POPMART, NVDA}。
+#   财年窗口按公司而定（非全局统一）:
+#     ZTE / POPMART : 2023 / 2024 / 2025（自然年报表）
+#     NVDA          : 2024 / 2025 / 2026（NVIDIA 财年在次年 1 月末结束, FY2026 结束于 2026-01-25,
+#                     故截至数据截止日 2026-07-20 其最近三个已报告财年为 FY2024/FY2025/FY2026）
 #
 # GT 值单一数据源: 计算器 financial_data_snapshot.py 内嵌的冻结答案键
 #   (fixtures/groundtruth_snapshot.json 为其可读镜像/可选 override)
@@ -32,12 +36,14 @@
 # 结构检查点（present, methodology:true）验证口径/单位/财年声明, 非数值比较:
 #   - caliber_net_profit / caliber_roe / caliber_inventory: 是否声明并使用正确口径
 #   - caliber_unit_currency: 货币与单位口径是否正确（中兴/泡泡玛特 CNY 亿元; 英伟达 USD 亿美元; 不跨币种换算）
-#   - caliber_fiscal_year: 财年口径是否正确（英伟达按其 1 月末结束的财年对应, 而非自然年错配）
+#   - caliber_fiscal_year: 财年口径是否正确（英伟达按其 1 月末结束的财年对应 FY2024/FY2025/FY2026,
+#     而非自然年错配、也非把最近三财年误取为 FY2023-FY2025）
 #
 # data_source_per_company (count_min, methodology): 每家公司都应声明数据来源（共 3 家）。
 #
 # CF5: 超容差的数值检查点记 0 分（不给部分分）。
-# CF4: 用明显陈旧数据冒充最新（例如把 2024FY 当作最新而漏 2025FY）→ D1 封顶为等级 1。
+# CF4: 用明显陈旧数据冒充最新（中兴/泡泡玛特把 2024FY 当作最新而漏 2025FY；
+#      英伟达把 FY2025 当作最新而漏 FY2026）→ D1 封顶为等级 1。
 # CF1: 捏造财务数字/来源 → 提议给人工, 确凿证据方可封顶总分。
 
 fields:
@@ -171,28 +177,7 @@ fields:
     methodology: true
     description: "泡泡玛特 2025FY 存货期末余额（亿元 CNY）"
 
-  # ============================ 英伟达 NVDA.O (USD 亿美元, 财年1月末结束) ============================
-  NVDA_2023_net_profit:
-    type: number
-    tol: 0
-    decimals: 2
-    grounding: true
-    methodology: true
-    description: "英伟达 FY2023 净利润（亿美元 USD; NVIDIA 财年, 结束于 2023-01）"
-  NVDA_2023_roe:
-    type: pct
-    tol: 0
-    decimals: 4
-    grounding: true
-    methodology: true
-    description: "英伟达 FY2023 净资产收益率（%）"
-  NVDA_2023_inventory:
-    type: number
-    tol: 0
-    decimals: 2
-    grounding: true
-    methodology: true
-    description: "英伟达 FY2023 存货期末余额（亿美元 USD）"
+  # ======== 英伟达 NVDA.O (USD 亿美元, 财年1月末结束; 最近三财年 = FY2024/FY2025/FY2026) ========
   NVDA_2024_net_profit:
     type: number
     tol: 0
@@ -235,6 +220,27 @@ fields:
     grounding: true
     methodology: true
     description: "英伟达 FY2025 存货期末余额（亿美元 USD）"
+  NVDA_2026_net_profit:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2026 净利润（亿美元 USD; NVIDIA 财年, 结束于 2026-01）"
+  NVDA_2026_roe:
+    type: pct
+    tol: 0
+    decimals: 4
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2026 净资产收益率（%）"
+  NVDA_2026_inventory:
+    type: number
+    tol: 0
+    decimals: 2
+    grounding: true
+    methodology: true
+    description: "英伟达 FY2026 存货期末余额（亿美元 USD）"
 
   # ============================ 口径检查点 (present, methodology, 非数值比较) ============================
   caliber_net_profit:
@@ -256,7 +262,7 @@ fields:
   caliber_fiscal_year:
     type: present
     methodology: true
-    description: "财年口径: 英伟达按其 1 月末结束的财年对应 2023FY/2024FY/2025FY（而非自然年错配）; 中兴/泡泡玛特为自然年"
+    description: "财年口径: 英伟达按其 1 月末结束的财年对应 FY2024/FY2025/FY2026（而非自然年错配, 也非误取 FY2023-FY2025）; 中兴/泡泡玛特为自然年 2023/2024/2025"
 
   # ============================ 数据来源完整性 (count_min, methodology) ============================
   data_source_per_company:

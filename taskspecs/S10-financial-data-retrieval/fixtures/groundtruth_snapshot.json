@@ -1,5 +1,6 @@
 {
   "_note": "Readable mirror of the frozen answer key embedded in financial_data_snapshot.py. Values sourced from company filings; net_profit=归母净利润, roe=加权净资产收益率, inventory=存货期末余额. Pass this file via --snapshot to override the embedded key (same nested shape).",
+  "_fiscal_year_note": "The three-year window is PER COMPANY. ZTE/POPMART are calendar-year filers -> 2023/2024/2025. NVIDIA's fiscal year ends in late January of the next calendar year (FY2026 ended 2026-01-25), so as of the cutoff its latest three reported fiscal years are FY2024/FY2025/FY2026. An override must use these same year keys — the calculator's frozen per-company FISCAL_YEARS decides which keys are read, and unmatched years surface as self-check failures.",
   "data_cutoff": "2026-07-20",
   "rounding": "net_profit/inventory -> 2 decimals; roe -> 2 decimals of percent",
   "companies": {
@@ -35,11 +36,11 @@
       "listing": "美股/纳斯达克",
       "currency": "USD",
       "unit": "亿美元",
-      "fiscal_year_end": "财年1月末结束 (FY2025 结束于 2025-01)",
+      "fiscal_year_end": "财年1月末结束 (FY2026 结束于 2026-01)",
       "years": {
-        "2023": {"net_profit": 43.68, "roe": 17.93, "inventory": 51.59},
         "2024": {"net_profit": 297.60, "roe": 91.46, "inventory": 52.82},
-        "2025": {"net_profit": 728.80, "roe": 119.18, "inventory": 100.80}
+        "2025": {"net_profit": 728.80, "roe": 119.18, "inventory": 100.80},
+        "2026": {"net_profit": 1200.67, "roe": 101.49, "inventory": 214.03}
       }
     }
   }

@@ -1,5 +1,5 @@
 task_id: S10
-version: 1.1.1
+version: 1.2.0
 family: data-retrieval
 tier: T1
 persona: 研究员
@@ -8,15 +8,16 @@ prompt_text: >
 
   Your role: Financial data analyst on a research desk.
   Situation: Retrieve, for each of the three companies below, THREE financial figures for each of
-  their most recent three fiscal years (2023FY / 2024FY / 2025FY), using the exact calibers,
-  currency/unit, and rounding stated. Report each figure with its data source.
+  their MOST RECENT THREE FISCAL YEARS, using the exact calibers, currency/unit, and rounding
+  stated. Note that the three-year window differs by company because NVIDIA does not report on the
+  calendar year — see 财年口径 below. Report each figure with its data source.
 
-  --- Companies ---
-    中兴通讯   000063.SZ  A股(深交所)  报表货币 人民币(CNY)   数据单位 亿元
-    泡泡玛特   09992.HK   港股(港交所)  报表货币 人民币(CNY)   数据单位 亿元
-    英伟达     NVDA.O     美股(纳斯达克) 报表货币 美元(USD)     数据单位 亿美元
+  --- Companies (with the three fiscal years required for each) ---
+    中兴通讯   000063.SZ  A股(深交所)  报表货币 人民币(CNY)   数据单位 亿元    2023FY / 2024FY / 2025FY
+    泡泡玛特   09992.HK   港股(港交所)  报表货币 人民币(CNY)   数据单位 亿元    2023FY / 2024FY / 2025FY
+    英伟达     NVDA.O     美股(纳斯达克) 报表货币 美元(USD)     数据单位 亿美元  FY2024 / FY2025 / FY2026
 
-  --- Metrics (retrieve all three, for each company, for each of 2023FY/2024FY/2025FY) ---
+  --- Metrics (retrieve all three, for each company, for each of that company's three fiscal years) ---
     1. 净利润 (Net profit)
     2. 净资产收益率 (ROE)
     3. 存货 (Inventory)
@@ -31,11 +32,12 @@ prompt_text: >
     英伟达            : 美元(USD), 亿美元.
     Report each company's figures in its own reporting currency; do NOT convert across currencies.
 
-  --- Fiscal-year convention ---
-    中兴通讯 / 泡泡玛特 : 财年为自然年 (截止 12-31); 2023FY/2024FY/2025FY = 2023/2024/2025 年报.
-    英伟达            : 财年在次年 1 月末结束 (NVIDIA fiscal year); FY2025 结束于 2025-01,
-                        FY2024 结束于 2024-01, FY2023 结束于 2023-01. 以 NVIDIA 财年口径对应
-                        2023FY/2024FY/2025FY, 而非按自然年错配.
+  --- Fiscal-year convention (口径关键) ---
+    中兴通讯 / 泡泡玛特 : 财年为自然年 (截止 12-31); 最近三个财年 = 2023/2024/2025 年报.
+    英伟达            : 财年在次年 1 月末结束 (NVIDIA fiscal year); FY2026 结束于 2026-01,
+                        FY2025 结束于 2025-01, FY2024 结束于 2024-01. 以数据截止日 2026-07-20
+                        计, NVIDIA 已报告的最近三个财年为 FY2024 / FY2025 / FY2026 —— 不是
+                        FY2023-FY2025, 也不要按自然年错配 (例如把 FY2025 当成"2025自然年").
 
   --- Rounding ---
     净利润 与 存货 : 四舍五入到 2 位小数.
@@ -55,11 +57,11 @@ prompt_text: >
     - State the data source for every quantitative claim.
     - Use the exact caliber, currency/unit, fiscal-year convention, and rounding specified above.
 measurable_outputs:
-  - 27 个数值答案（3 家公司 × 3 财年 × {归母净利润, 加权净资产收益率, 存货期末余额}）, 每个按指定货币单位与四舍五入口径呈现
+  - 27 个数值答案（3 家公司 × 3 财年 × {归母净利润, 加权净资产收益率, 存货期末余额}）, 每个按指定货币单位与四舍五入口径呈现。财年窗口按公司而定：中兴/泡泡玛特 2023/2024/2025（自然年）; 英伟达 FY2024/FY2025/FY2026（财年1月末结束）
   - 每家公司的数据来源声明（filing / 数据 API / 工具名称 + as-of）
   - 口径正确性（归母净利润 / 加权ROE / 存货期末余额 的口径选择与题目一致）
   - 货币与单位正确性（中兴/泡泡玛特 CNY 亿元；英伟达 USD 亿美元；不跨币种换算）
-  - 财年口径正确性（英伟达按其 1 月末结束的财年对应, 而非自然年错配）
+  - 财年口径正确性（英伟达按其 1 月末结束的财年对应 FY2024/FY2025/FY2026, 而非自然年错配, 也非误取 FY2023-FY2025）
 rubric_weights: {D1: 60, D2: 12, D3: 8, D4: 0, D5: 0, D6: 20}
 objective_dims: [D1, D2]
 # v1.1.0 权重: D1:60 D2:12 D3:8 D6:20 = 100（较 S9 的 40/20/15/25 更向 D1 集中）。
@@ -90,7 +92,7 @@ task_validators:
 engine_requirements:
   calculator: financial_data_snapshot
   gt_kind: calculator
-  gt_version: "1.0"
+  gt_version: "1.1"
   checkpoint_types: [number, pct, present, count_min]
   tolerance_policy: >
     所有数值检查点 tol=0（精确匹配, 按题设四舍五入口径后与 GT 完全相等才得分）。

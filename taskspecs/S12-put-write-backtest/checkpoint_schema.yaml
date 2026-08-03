@@ -1,0 +1,215 @@
+# =============================================================================
+# S12 检查点模式 — 共 29 个检查点
+# =============================================================================
+# 设计原则：外部真值只用在真正存在唯一答案的地方；策略组指标一律走内部类型。
+#
+# 标签含义：
+#   grounding: true    → 计入 D1 第一层 grounding_pass_fraction
+#   methodology: true  → 计入 D2 第一层 methodology_pass_fraction
+#   两者皆无           → 只计入整体 pass_fraction，不锚定任何维度分数
+#
+# 注意 `decimals` 全部省略：grade_checkpoints.py 的精度对齐逻辑只在 tol==0 时触发
+# （`if tol == 0 and isinstance(truth, float)`），本容器所有检查点 tol 均 > 0，
+# 声明 decimals 不会被读取。
+#
+# 注意 `present` 类型的双重作用：既给出「报了没有」的真实通过/未通过（无需 GT、
+# deterministic=False 故不触发 CF5），提取到的数值又会进入 build_env() 供下方
+# reconcile/consistency 公式求值。所以一个字段同时是披露检查点和公式输入。
+# 报告中这批检查点显示「通过」仅表示**已披露**，不表示数值正确。
+# =============================================================================
+
+fields:
+
+  # ===========================================================================
+  # D1 第一层：中债-综合财富（总值）逐年回报（6 个，外部真值）
+  # ===========================================================================
+  # 这是唯一设外部 GT 的市场数据。财富口径由 prompt 明确钉死，不存在合法替代，
+  # 因此紧容差是公平的。误用净价/全价口径会整体偏离约 3%/年 → 6 个检查点全部失败，
+  # 这正是本组检查点的核心捕获目标（gold 列为最典型的失真之一）。
+  #
+  # 沪深300 逐年回报**故意不设检查点**：全收益与价格指数两种口径的逐年差异达
+  # 0.9-1.7pp，任何能同时容纳两者的容差都宽到失去鉴别力。该腿的口径正确性改由
+  # 「对照组年化（宽容差）+ D1 第二层锚点」间接度量。
+
+  bond_2020:
+    type: pct
+    tol: 0.005          # 公开基准/久期推算值，±0.5pp
+    grounding: true
+
+  bond_2021:
+    type: pct
+    tol: 0.002          # 中债官方/媒体披露值
+    grounding: true
+
+  bond_2022:
+    type: pct
+    tol: 0.005
+    grounding: true
+
+  bond_2023:
+    type: pct
+    tol: 0.005
+    grounding: true
+
+  bond_2024:
+    type: pct
+    tol: 0.002          # 中债官方/媒体披露值
+    grounding: true
+
+  bond_2025:
+    type: pct
+    tol: 0.005
+    grounding: true
+
+  # ===========================================================================
+  # D2 第一层：计算链闭合（8 个）
+  # ===========================================================================
+
+  # --- 骨干闭合：累计 ↔ 年化 互推 -------------------------------------------
+  # 策略组用**双向**互推：两个字段各以对方为公式输入。
+  #   两者都报 → 两个检查点都判定（一处矛盾会同时打中两个，这是有意的——
+  #              累计与年化互不闭合是严重的算术失败）
+  #   缺一个   → 缺的那个 fail（reconcile 在自报值缺失时判 fail），另一个 NA
+  # 由此「藏输入」永远不比「照实报」便宜，堵住了纯一致性方案的反向激励。
+  #
+  # 容差按导数不对称设定：
+  #   由累计推年化：d(annual)/d(cum) ≈ 0.135 → 输入舍入被压缩 → tol 0.001 够紧
+  #   由年化推累计：d(cum)/d(annual) ≈ 7.3  → 6 年复利放大 → tol 0.004 才公平
+
+  strategy_annual_return:
+    type: reconcile
+    formula: "(1+strategy_cum_return)**(1/6)-1"
+    tol: 0.001
+    methodology: true
+
+  strategy_cum_return:
+    type: reconcile
+    formula: "(1+strategy_annual_return)**6-1"
+    tol: 0.004
+    methodology: true
+
+  # 对照组：年化有外部 GT，故只需单向内部闭合（累计 ← 年化）。
+  # 累计的正确性由此闭合 + 年化的紧 GT 联合约束，无需再给累计设 GT
+  # （两种沪深300 口径的累计相差 0.94pp，设 GT 会被迫把容差放到 0.010 而失去意义）。
+
+  benchmark_annual_return:
+    type: pct
+    tol: 0.0015         # 恰好容纳全收益口径与价格指数口径（年化相差约 13bp）
+    methodology: true
+
+  benchmark_cum_return:
+    type: reconcile
+    formula: "(1+benchmark_annual_return)**6-1"
+    tol: 0.004
+    methodology: true
+
+  # --- 夏普闭合 -------------------------------------------------------------
+  # consistency 类型不读取字段自身的值，只求值 lhs 与 rhs，所以检查点可以独立命名。
+  # rel:true → 阈值 = tol × |rhs|。rhs（算出的夏普）约 1.3，tol 0.06 → 绝对阈值约 0.078，
+  # 覆盖 1 位小数报告的输入舍入放大（σ≈2% 时年化的 0.1pp 舍入放大约 55 倍到夏普上）。
+  # 未披露 rf → 两个闭合都 NA；该缺口由 intermediate_disclosure_count 兜住。
+
+  strategy_sharpe_closure:
+    type: consistency
+    lhs: "strategy_sharpe"
+    rhs: "(strategy_annual_return - rf) / strategy_volatility"
+    tol: 0.06
+    rel: true
+    methodology: true
+
+  benchmark_sharpe_closure:
+    type: consistency
+    lhs: "benchmark_sharpe"
+    rhs: "(benchmark_annual_return - rf) / benchmark_volatility"
+    tol: 0.06
+    rel: true
+    methodology: true
+
+  # --- 跨组差异闭合（gold 明示的「二阶项」结构洞察）--------------------------
+  # 两组共享同一 95% 债底仓，故组合层面的差异只能来自 5% 袖子：
+  #   策略年化 − 对照年化 = 0.05 × (策略袖子年化 − 对照袖子年化)
+  # 几何平均不能线性分解的误差在相减时基本抵消（两组债底仓相同），精度约 10bp。
+  #
+  # 注意：同一关系若写在**年化的绝对水平**上（组合年化 = 0.95×债 + 0.05×袖子）
+  # 则不成立——实测偏差约 21bp（0.95×4.1% + 0.05×4.5% = 4.12% vs 真实 4.33%），
+  # 容差得放到 0.0025 以上而失去约束力。故只取差分形式。
+
+  cross_group_diff_closure:
+    type: consistency
+    lhs: "strategy_annual_return - benchmark_annual_return"
+    rhs: "0.05 * (strategy_sleeve_annual - benchmark_sleeve_annual)"
+    tol: 0.0015
+    methodology: true
+
+  # --- 中间量披露汇总（修补「藏中间量 → 检查点转 NA → 不扣分」的反向激励）----
+  # 5 项候选：rf / 策略组袖子收益 / 对照组袖子收益 / 再平衡口径声明 / 波动率数据频率声明
+  # 门槛 3 项。计数规则见 extraction_notes.md。
+  # count_min 的 deterministic=False，故不触发 CF5——披露不足是完整性问题，不是数值错误。
+
+  intermediate_disclosure_count:
+    type: count_min
+    target: 3
+    methodology: true
+
+  # ===========================================================================
+  # 披露与公式输入（15 个，无标签 → 不锚定任何维度分数）
+  # ===========================================================================
+  # 这些检查点的作用有三：(a) 让提取器把值取出来喂给上面的公式；
+  # (b) 在报告的检查点表里留下「哪些交付物被披露了」的审计痕迹；
+  # (c) 供盲评官在 D3 判断完整性时有据可循（判官读作品原文，不读本表）。
+  # 一律不打 grounding/methodology 标签——避免用「报了就通过」的容易题稀释
+  # D1/D2 的第一层基线，削弱真正的一致性信号。
+
+  strategy_max_dd:
+    type: present
+    # 最大回撤没有任何检查点可以约束（无外部 GT、也不出现在任何闭合关系里，
+    # 且六年组合逐年回报全为正，连「回撤 ≥ 最差年度亏损」的弱下界都用不上）。
+    # 合理性判断交由 D2 第二层判官锚点——那是不可数值核验的缺陷，属 L2 合法辖区。
+
+  strategy_volatility:
+    type: present
+
+  strategy_sharpe:
+    type: present
+
+  benchmark_max_dd:
+    type: present
+
+  benchmark_volatility:
+    type: present
+
+  benchmark_sharpe:
+    type: present
+
+  rf:
+    type: present
+    # 无风险利率取值。两组共用一个字段——学生通常对两组用同一 rf，
+    # 若拆成 strategy_rf / benchmark_rf 会让只报一次的答案产生假 NA。
+
+  strategy_sleeve_annual:
+    type: present
+
+  benchmark_sleeve_annual:
+    type: present
+    # 这个字段还有一个诊断作用：它的量级揭示学生对沪深300 用了哪种口径
+    # （全收益年化约 4.5% vs 价格指数年化约 −0.4%），是 D1 第二层口径锚点的证据来源。
+
+  rebalance_declared:
+    type: present
+
+  vol_frequency_declared:
+    type: present
+
+  caliber_declared:
+    type: present
+    # 债底仓是否明确声明为财富（总值）口径，并区分于净价/全价
+
+  proxy_disclosed:
+    type: present
+    # 是否说明 510330 在 2020-2025 无实盘挂牌期权，以及实际使用的代理标的
+
+  enhancement_explanation:
+    type: present
+
+  drawdown_comparison:
+    type: present

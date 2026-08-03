@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Ground-truth calculator for S10 (financial-data-retrieval) — v1.0 Snapshot.
+"""Ground-truth calculator for S10 (financial-data-retrieval) — v1.1 Snapshot.
 
 S10 asks for 3 fixed, definite financial figures (归母净利润 / 加权净资产收益率 / 存货期末余额)
-for three companies across their most recent three fiscal years (2023FY / 2024FY / 2025FY).
+for three companies across their most recent three fiscal years. That window is PER COMPANY:
+ZTE / POPMART report on the calendar year (2023FY / 2024FY / 2025FY), while NVIDIA's fiscal year
+ends in late January of the following calendar year, so as of the 2026-07-20 data cutoff its
+latest three reported fiscal years are FY2024 / FY2025 / FY2026.
 Unlike S9 (live market data), S10's ground truth is a FROZEN answer key sourced from company
 filings — there is nothing to fetch. This calculator therefore packs the authoritative answer
 key as an embedded constant, flattens it into the 27 checkpoint values the grader consumes, and
@@ -18,10 +21,10 @@ answer key (same nested shape) without editing this script.
   inventory  : 资产负债表 存货/Inventories 期末余额, 单位 亿
 Rounding (fixed by the task): net_profit / inventory -> 2 decimals; roe -> 2 decimals of percent.
 
-Companies:
-  ZTE      中兴通讯 000063.SZ  (A股/深交所, CNY, 亿元)
-  POPMART  泡泡玛特 09992.HK   (港股/港交所, CNY, 亿元)
-  NVDA     英伟达   NVDA.O      (美股/纳斯达克, USD, 亿美元; 财年1月末结束)
+Companies (with their frozen three-fiscal-year window):
+  ZTE      中兴通讯 000063.SZ  (A股/深交所, CNY, 亿元;   2023FY / 2024FY / 2025FY, 自然年)
+  POPMART  泡泡玛特 09992.HK   (港股/港交所, CNY, 亿元;   2023FY / 2024FY / 2025FY, 自然年)
+  NVDA     英伟达   NVDA.O      (美股/纳斯达克, USD, 亿美元; FY2024 / FY2025 / FY2026, 财年1月末结束)
 
 Usage:
   python financial_data_snapshot.py --out run/groundtruth.json [--snapshot fixtures/groundtruth_snapshot.json]
@@ -35,11 +38,24 @@ import os
 import sys
 
 CALCULATOR_ID = "financial_data_snapshot"
-CALCULATOR_VERSION = "1.0"
+CALCULATOR_VERSION = "1.1"
 DATA_CUTOFF = "2026-07-20"
 
 METRICS = ["net_profit", "roe", "inventory"]
-FISCAL_YEARS = ["2023", "2024", "2025"]
+
+# v1.1: the three-fiscal-year window is PER COMPANY, not global. ZTE / POPMART report on the
+# calendar year, so their latest three fiscal years are 2023/2024/2025. NVIDIA's fiscal year ends
+# in late January of the FOLLOWING calendar year (FY2026 ended 2026-01-25), so as of the
+# 2026-07-20 cutoff its latest three reported fiscal years are FY2024/FY2025/FY2026 — NOT
+# FY2023/FY2024/FY2025 (v1.0 shifted NVIDIA's window one year too early).
+# These years are frozen together with the checkpoint field names ({COMPANY}_{FY}_{METRIC}), so a
+# --snapshot override must use the same years; if it does not, the values land nowhere and the
+# self-check fails rather than silently grading against absent ground truth.
+FISCAL_YEARS = {
+    "ZTE": ["2023", "2024", "2025"],
+    "POPMART": ["2023", "2024", "2025"],
+    "NVDA": ["2024", "2025", "2026"],
+}
 
 # --- Embedded authoritative answer key (from S10 ground truth, company filings) -------------
 # Values are ALREADY rounded per the task rounding policy. Structure:
@@ -79,11 +95,11 @@ ANSWER_KEY = {
         "listing": "美股/纳斯达克",
         "currency": "USD",
         "unit": "亿美元",
-        "fiscal_year_end": "财年1月末结束 (FY2025 结束于 2025-01)",
+        "fiscal_year_end": "财年1月末结束 (FY2026 结束于 2026-01)",
         "years": {
-            "2023": {"net_profit": 43.68, "roe": 17.93, "inventory": 51.59},
             "2024": {"net_profit": 297.60, "roe": 91.46, "inventory": 52.82},
             "2025": {"net_profit": 728.80, "roe": 119.18, "inventory": 100.80},
+            "2026": {"net_profit": 1200.67, "roe": 101.49, "inventory": 214.03},
         },
     },
 }
@@ -107,9 +123,10 @@ def flatten(answer_key):
             "currency": entry.get("currency"),
             "unit": entry.get("unit"),
             "fiscal_year_end": entry.get("fiscal_year_end"),
+            "fiscal_years": list(FISCAL_YEARS[company]),
         }
         years = entry.get("years", {})
-        for fy in FISCAL_YEARS:
+        for fy in FISCAL_YEARS[company]:
             row = years.get(fy, {})
             for metric in METRICS:
                 key = f"{company}_{fy}_{metric}"
@@ -125,7 +142,7 @@ def compute_self_check(values):
     expected = 0
     present_ok = 0
     for company in COMPANIES:
-        for fy in FISCAL_YEARS:
+        for fy in FISCAL_YEARS[company]:
             for metric in METRICS:
                 expected += 1
                 key = f"{company}_{fy}_{metric}"

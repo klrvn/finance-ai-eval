@@ -1,0 +1,59 @@
+calculator_id: put_write_snapshot
+script: put_write_snapshot.py
+version: "1.0"
+family: quant-backtest
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+inputs:
+  groundtruth_snapshot.json: "(optional) override answer key JSON (same nested shape as the embedded constants: bond_wealth_yearly / csi300_total_return_yearly); default GT is the embedded frozen series"
+outputs:
+  # 中债-综合财富(总值)逐年回报 —— 真外部真值，D1 第一层锚点
+  - bond_2020
+  - bond_2021
+  - bond_2022
+  - bond_2023
+  - bond_2024
+  - bond_2025
+  # 对照组年化收益率 —— 由两条逐年序列 + 年度再平衡计算得出（非硬编码）
+  - benchmark_annual_return
+side_outputs:
+  - benchmark_cum_return      # 对照组累计收益率（写入 side_outputs 供审计，非检查点）
+  - benchmark_yearly          # 组合逐年回报（同上）
+needs_market_data: false
+self_check: >
+  emits self_check{passed}; 11 项检查：两条逐年序列的覆盖完整性与数值有限性、
+  债券财富指数逐年为正且落在合理区间、沪深300 负回报年份与已知市场方向一致、
+  组合权重合计为 1、对照组累计与年化互推闭合、逐年连乘还原累计、
+  对照组年化落在 95% 低波债券主导下的合理区间
+scale: >
+  所有百分比量以 fraction 输出（5.09% -> 0.0509），与提取器 validators.py 的规范化结果同刻度。
+  gt_recipe.yaml **不得**声明 percent_fields —— 声明会使 gt_dispatch.apply_percent_canon
+  再除一次 100，7 个 pct 检查点全部失败。
+calibers:
+  bond_index: "中债-综合财富(总值)指数 CBA00101.CS —— 财富/总值口径，含债券价格 + 应计利息 + 付息再投资；区别于全价（含应计利息、不含再投资）与净价（仅价格）"
+  csi300_leg: "沪深300 全收益指数 H00300.CSI —— 含分红再投资，贴近 ETF 实际持有口径"
+  rebalancing: "年度再平衡 —— 每年初权重重置回 95/5，故年度组合回报为两腿加权和，跨年几何连乘"
+tolerance_alignment:
+  bond_disclosed: "2021 (+5.09%) 与 2024 (+7.61%) 为中债官方/媒体披露值 -> 容器容差 0.002"
+  bond_derived: "2020/2022/2023/2025 为公开基准/久期推算 -> 容器容差 0.005"
+  benchmark_annual: >
+    容器容差 0.0015 —— 恰好同时容纳沪深300 全收益口径与价格指数口径两种合法选择
+    （二者推出的对照组年化相差约 13bp）。口径优劣由 D1 第二层扣分锚点承载，
+    不在第一层判错。注意**累计**收益率的两口径差距约 94bp（复利放大），
+    因此容器有意不给对照组累计设 GT，改由 reconcile 闭合 + 年化紧 GT 联合约束。
+out_of_scope: >
+  策略组的五项指标（累计/年化/最大回撤/年化波动率/夏普）不在本计算器输出范围内。
+  历史期权权利金没有公开的权威逐月序列，且回测结果取决于 IV 取值、保证金口径、
+  换仓滑点等定价假设——属模型依赖而非数据缺失，补数据也解决不了。
+  给它们编造点值充当真值，会惩罚「诚实标注为假设估算并给出区间」这一正确行为，
+  同时放行伪精确的答案。这些指标由容器的 reconcile / consistency / present 检查点承载。
+data_cutoff: "2026-07-31（逐年序列覆盖 2020-2025 六个完整年度，已收官，不随时间变化）"
+design_note: >
+  v1.0: snapshot-to-GT 计算器，网络无关。与 S10/S11 的 snapshot 模式同族，但多一层设计：
+  它不只展开内嵌常量，还**推导**对照组年化（由两条逐年序列 + 年度再平衡规则算出），
+  因此 self_check 真正在验证算术，且任何分量修改会自动传播到派生值。
+  这是本容器「外部真值只用在真正存在唯一答案的地方」原则的体现——
+  逐年市场数据有唯一答案（外部真值）、对照组结构完全确定（可推导）、
+  策略组结果取决于假设（不设真值）。

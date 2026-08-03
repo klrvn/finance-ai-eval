@@ -1,27 +1,33 @@
 {
   "task_id": "S10",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "origin": "legacy-v1",
   "authored_by": "eval-judge container-authoring, from user-provided question set (S10_financial_data_retrieval.md) and definite answer key (S10_ground_truth.md)",
   "origin_note": "New authored container (not a v1 migration). origin is tagged 'legacy-v1' to satisfy the spec-lint governance gate, which currently only accepts that value; true authorship is recorded here.",
-  "method_evidence": "Financial data retrieval with definite answers: 3 companies × 3 fiscal years (2023FY/2024FY/2025FY) × 3 metrics (归母净利润 / 加权净资产收益率 / 存货期末余额) = 27 fixed figures sourced from company filings. Companies: 中兴通讯 000063.SZ (A股, CNY 亿元), 泡泡玛特 09992.HK (港股, CNY 亿元), 英伟达 NVDA.O (美股, USD 亿美元; NVIDIA fiscal year ends late January). Tests data-retrieval accuracy and caliber discipline: correct 口径 (归母 net profit, weighted ROE, period-end inventory), correct currency/unit (no cross-currency conversion), correct fiscal-year mapping (NVIDIA FY vs calendar year), correct rounding, and source citation per company. GT is a FROZEN answer key embedded in financial_data_snapshot.py (network-free snapshot calculator), mirrored for readability in fixtures/groundtruth_snapshot.json.",
+  "method_evidence": "Financial data retrieval with definite answers: 3 companies × 3 fiscal years × 3 metrics (归母净利润 / 加权净资产收益率 / 存货期末余额) = 27 fixed figures sourced from company filings. The three-year window is PER COMPANY: 中兴通讯 000063.SZ (A股, CNY 亿元) and 泡泡玛特 09992.HK (港股, CNY 亿元) are calendar-year filers -> 2023FY/2024FY/2025FY; 英伟达 NVDA.O (美股, USD 亿美元) has a fiscal year ending late January of the next calendar year, so as of the 2026-07-20 cutoff its latest three reported fiscal years are FY2024/FY2025/FY2026. Tests data-retrieval accuracy and caliber discipline: correct 口径 (归母 net profit, weighted ROE, period-end inventory), correct currency/unit (no cross-currency conversion), correct fiscal-year mapping (NVIDIA FY vs calendar year, and identifying which three NVIDIA FYs are the latest), correct rounding, and source citation per company. GT is a FROZEN answer key embedded in financial_data_snapshot.py (network-free snapshot calculator), mirrored for readability in fixtures/groundtruth_snapshot.json.",
   "source_files": {
     "questions": "C:/Users/RBLU/Downloads/S10_financial_data_retrieval.md",
-    "answers": "C:/Users/RBLU/Downloads/S10_ground_truth.md"
+    "answers": "C:/Users/RBLU/Downloads/S10_ground_truth.md",
+    "answers_v1.2.0": "C:/Users/RBLU/Documents/tasks/S10_GT.md (user-supplied revision shifting NVIDIA's window to FY2024-FY2026)"
   },
   "engine_versions": {
     "grader": "1.1 (checkpoint-level `decimals` support)",
     "aggregator": "2.3",
     "extractor": "1.0",
-    "calculator": "financial_data_snapshot.py v1.0 (snapshot, embedded answer key)"
+    "calculator": "financial_data_snapshot.py v1.1 (snapshot, embedded answer key)"
   },
   "review_status": "frozen",
   "container_hash": "pending_recompute",
   "data_provisioned": {
     "mode": "snapshot",
     "gt_kind": "calculator",
-    "calculator": "financial_data_snapshot.py v1.0 (embedded frozen answer key)",
+    "calculator": "financial_data_snapshot.py v1.1 (embedded frozen answer key)",
     "data_cutoff": "2026-07-20",
+    "fiscal_years": {
+      "ZTE": ["2023", "2024", "2025"],
+      "POPMART": ["2023", "2024", "2025"],
+      "NVDA": ["2024", "2025", "2026"]
+    },
     "calibers": {
       "net_profit": "归属母公司股东的净利润 (归母净利润)",
       "roe": "加权净资产收益率 (percent)",
@@ -29,13 +35,14 @@
     },
     "rounding": "net_profit/inventory -> 2 decimals; roe -> 2 decimals of percent",
     "companies": {
-      "ZTE": "中兴通讯 000063.SZ (A股/深交所, CNY 亿元, 自然年)",
-      "POPMART": "泡泡玛特 09992.HK (港股/港交所, CNY 亿元, 自然年)",
-      "NVDA": "英伟达 NVDA.O (美股/纳斯达克, USD 亿美元, 财年1月末结束)"
+      "ZTE": "中兴通讯 000063.SZ (A股/深交所, CNY 亿元, 自然年; 2023FY/2024FY/2025FY)",
+      "POPMART": "泡泡玛特 09992.HK (港股/港交所, CNY 亿元, 自然年; 2023FY/2024FY/2025FY)",
+      "NVDA": "英伟达 NVDA.O (美股/纳斯达克, USD 亿美元, 财年1月末结束; FY2024/FY2025/FY2026)"
     },
     "self_check": "verifies all 27 values present, numeric, finite; ROE within plausible band [-200,200]%"
   },
   "changelog": {
+    "1.2.0": "Corrected NVIDIA's three-fiscal-year window per user-supplied GT revision (C:/Users/RBLU/Documents/tasks/S10_GT.md). NVIDIA's fiscal year ends in late January of the FOLLOWING calendar year (FY2026 ended 2026-01-25), so as of the frozen 2026-07-20 data cutoff its latest three REPORTED fiscal years are FY2024/FY2025/FY2026 — v1.0-v1.1.1 used FY2023/FY2024/FY2025, one year too early, which asked for a stale window and would have failed a correct answer on 3 checkpoints while passing a stale one. Fix: the fiscal-year window is now PER COMPANY rather than a single global list (financial_data_snapshot.py FISCAL_YEARS became a {company: [years]} map, calculator v1.0 -> v1.1). Checkpoints NVDA_2023_{net_profit,roe,inventory} were replaced by NVDA_2026_{net_profit,roe,inventory} (1200.67 亿美元 / 101.49% / 214.03 亿美元); NVDA FY2024 and FY2025 values are unchanged, and ZTE/POPMART (calendar-year filers) are untouched at 2023/2024/2025. Checkpoint count stays 27; weights, tolerances, decimals, CF rules and citation policy all unchanged. Synced across spec.yaml (prompt now states the per-company window), checkpoint_schema.yaml, gt_recipe.yaml (produces + percent_fields: NVDA_2023_roe -> NVDA_2026_roe), fixtures/groundtruth_snapshot.json, judge_notes.md (CF4 anchor + caliber_fiscal_year), the .calculator.yaml sidecar and registry.json. Verified: spec_lint green; gt_dispatch self_check passed 27/27 with percent_canon on the 9 ROE fields; a perfect answer run through validators.py -> grade_checkpoints.py scores grounding 1.0 / methodology 1.0 with zero CF5, and an answer using the old FY2023-FY2025 window now fails the 3 NVDA checkpoints as intended.",
     "1.1.1": "Made tol=0 genuinely exact. Declared tol was already 0 on all 27 numeric checkpoints, but the grader inferred GT precision from repr(float), so a GT of 728.80 read as 1dp and a wrong answer of 728.84 was rounded to 728.8 and PASSED — a silent +/-0.05 tolerance on 3 checkpoints (NVDA_2024_net_profit 297.60, NVDA_2025_net_profit 728.80, NVDA_2025_inventory 100.80). Fix: added opt-in checkpoint-level `decimals` to grade_checkpoints.py compare_scalar (backward compatible: absent -> prior repr-inference behavior, so S1-S9 are unaffected) and declared decimals on all 27 S10 numeric checkpoints (number=2; pct=4 because percent_canon puts ROE on the fraction scale). Verified with a 9-case boundary suite: exact/trailing-zero/higher-precision answers still PASS; off-by-0.01 and the former off-by-0.04 slack now FAIL. S9 and S10 perfect answers remain 1.0.",
     "1.1.0": "Re-weighted per user direction: D1 40->60, D4=0, D5=0 retained. Remaining 40 split D2:12 D3:8 D6:20 (was D2:20 D3:15 D6:25). Rationale: D1 dominates because correct retrieval + sourcing IS the task; D6 stays the clear #2 because 'did they actually use a tool vs. recite from memory' is a failure mode D1 cannot observe (all 27 figures can be right yet unsourced); D2 keeps caliber discipline (right number, wrong 口径) as a distinct failure mode; D3 is cut hardest because completeness is already heavily double-counted by the 27 grounding checkpoints inside a weight-60 D1. D1 Layer 1 unchanged (0.3*citation + 0.7*grounding, same as S9); D1 Layer 2 continues to use the data-retrieval family's standard three-tier source-pedigree anchors.",
     "1.0.1": "Fixed a percent-scale defect: the 9 ROE checkpoints are type:pct and the calculator emits percent-magnitude (15.19), while the extractor's validators.py canonicalizes any '%'-tagged answer to a fraction (0.1519). At tol=0 a PERFECT answer scored grounding 0.667 with CF5 on all 9 ROE checkpoints. Fix: declared percent_fields for the 9 ROE fields in gt_recipe.yaml so gt_dispatch.apply_percent_canon divides GT ROE by 100 onto the same fraction scale. Same treatment as S9 v2.4.3. Verified: an extractor-realistic perfect answer now scores 1.0/1.0/1.0 with zero CF5. Note the v1.0.0 smoke test missed this because it fed GT values straight to the grader, bypassing the extractor validator.",

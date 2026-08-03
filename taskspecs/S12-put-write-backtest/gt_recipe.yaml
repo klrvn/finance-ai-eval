@@ -1,0 +1,68 @@
+recipe_id: put_write_snapshot
+kind: calculator
+
+calculator:
+  script: skills/eval-groundtruth/scripts/put_write_snapshot.py
+  sidecar: skills/eval-groundtruth/scripts/put_write_snapshot.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    # 中债-综合财富（总值）逐年回报 —— D1 第一层的 6 个外部锚点
+    - bond_2020
+    - bond_2021
+    - bond_2022
+    - bond_2023
+    - bond_2024
+    - bond_2025
+    # 对照组年化收益率 —— 由上述逐年回报 + 沪深300 全收益逐年回报 + 年度再平衡**计算**得出
+    # （不是硬编码常量，见计算器 control_group_metrics()）
+    - benchmark_annual_return
+  side_outputs:
+    # 写入 provenance 供人工审计，不作为检查点：
+    # benchmark_cum_return（对照组累计）、benchmark_yearly（组合逐年回报）
+    - benchmark_cum_return
+    - benchmark_yearly
+
+# ---------------------------------------------------------------------------
+# 【关键】percent_fields 故意不声明 —— 反向踩坑同样致命
+# ---------------------------------------------------------------------------
+# 提取器的 validators.py 会把任何带 '%' 单位的作答值规范化为 FRACTION
+# （"5.09%" -> 0.0509）。本计算器输出的 GT **已经是 fraction 刻度**（0.0509 而非 5.09），
+# 与提取器同刻度，无需换算。
+# 若在此声明 percent_fields，gt_dispatch.apply_percent_canon 会把 GT 再除一次 100
+# （0.0509 -> 0.000509），所有 7 个 pct 检查点将全部失败。
+# 反之，若计算器改为输出 percent-magnitude，则**必须**声明 percent_fields——
+# 这是 S9 v2.4.3 与 S10 v1.0.1 修过的缺陷。两个方向都要对齐，任何一侧改动都需同步检查。
+# ---------------------------------------------------------------------------
+
+self_check: required        # self_check.passed 为假即停止评测
+
+inputs_required:
+  - name: groundtruth_snapshot.json
+    optional: true
+    na_policy: "可选（override）；默认 GT 为计算器内嵌的冻结逐年序列，网络无关，不需要此文件"
+
+fixtures:
+  dir: fixtures
+  files:
+    snapshot: groundtruth_snapshot.json   # 内嵌序列的可读镜像 / 可选 override
+  design_note: >
+    本 recipe 的真值分两类，来源与可核验程度不同，必须分开理解。
+
+    第一类（真外部真值）：中债-综合财富（总值）逐年回报 6 个值。来自中债估值中心/媒体披露
+    （2021 年 +5.09%、2024 年 +7.61% 为披露值，容差 0.002）与公开基准推算
+    （2020/2022/2023/2025，容差 0.005）。财富口径由 prompt 钉死，无合法替代。
+
+    第二类（可确定性推导）：对照组年化收益率。对照组结构完全确定——95% 债 + 5% 沪深300 ETF、
+    年度再平衡——所以其年化是一个真实存在的确定量，可由两条逐年序列精确算出：
+    年度组合回报 = 0.95×债 + 0.05×沪深300，逐年连乘后开六次方根。
+    计算器**计算**这个值而非硬编码，使 self_check 真正验证算术，也让任何分量修改自动传播。
+    ETF 腿取沪深300 全收益口径（H00300.CSI，含分红再投资，贴近 ETF 实际持有）得 4.33%；
+    取价格指数口径（000300.SH）得 4.20%。容差 0.0015 使两种合法口径都能通过第一层，
+    口径优劣改由 D1 第二层锚点承载（使用价格指数扣 0.5）——两层严格不重叠，
+    因为该口径选择**根本没有被第一层度量**。
+
+    **不属于本 recipe 的真值**：策略组的五项指标。历史期权权利金没有公开的权威逐月序列，
+    且结果取决于 IV 取值、保证金口径、换仓滑点等定价假设——属**模型依赖**而非数据缺失，
+    补数据也解决不了。因此策略组指标一律不设点值 GT，只以内部类型
+    （reconcile / consistency / present）承载。给它们编一个点值当真值，会惩罚
+    「诚实标注为假设估算并给区间」这一 gold 明确要求的正确行为，同时放行伪精确的答案。

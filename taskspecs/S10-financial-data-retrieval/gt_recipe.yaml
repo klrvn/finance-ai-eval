@@ -23,15 +23,16 @@ calculator:
     - POPMART_2025_net_profit
     - POPMART_2025_roe
     - POPMART_2025_inventory
-    - NVDA_2023_net_profit
-    - NVDA_2023_roe
-    - NVDA_2023_inventory
+    # NVDA 财年窗口为 FY2024/FY2025/FY2026（财年在次年 1 月末结束）
     - NVDA_2024_net_profit
     - NVDA_2024_roe
     - NVDA_2024_inventory
     - NVDA_2025_net_profit
     - NVDA_2025_roe
     - NVDA_2025_inventory
+    - NVDA_2026_net_profit
+    - NVDA_2026_roe
+    - NVDA_2026_inventory
   side_outputs: []
 # v1.0.1: 9 个 ROE 字段是百分比量, 计算器以 percent-magnitude 输出 (15.19, 119.18...)。
 # 提取器会把带 '%' 的作答值规范化为 FRACTION (15.19% -> 0.1519), 因此
@@ -40,7 +41,7 @@ calculator:
 # 与 S9 v2.4.3 同一处理。net_profit/inventory 为金额(亿元/亿美元), 不参与此换算。
 percent_fields: [ZTE_2023_roe, ZTE_2024_roe, ZTE_2025_roe,
                  POPMART_2023_roe, POPMART_2024_roe, POPMART_2025_roe,
-                 NVDA_2023_roe, NVDA_2024_roe, NVDA_2025_roe]
+                 NVDA_2024_roe, NVDA_2025_roe, NVDA_2026_roe]
 self_check: required        # halts the run if self_check.passed == false
 inputs_required:
   - name: groundtruth_snapshot.json
@@ -59,3 +60,8 @@ fixtures:
     四舍五入: net_profit/inventory 2 位小数; roe 百分比后 2 位小数。
     公司: 中兴通讯 000063.SZ (CNY 亿元) / 泡泡玛特 09992.HK (CNY 亿元) /
           英伟达 NVDA.O (USD 亿美元, 财年1月末结束)。
+    v1.1: 财年窗口改为按公司而定。中兴/泡泡玛特为自然年报表, 最近三财年仍是 2023/2024/2025;
+    英伟达财年在次年 1 月末结束 (FY2026 结束于 2026-01-25), 故截至 2026-07-20 截止日其最近
+    三个已报告财年为 FY2024/FY2025/FY2026——v1.0 误用 FY2023/FY2024/FY2025, 整体早了一年。
+    NVDA_2023_* 三个检查点替换为 NVDA_2026_*（净利润 1200.67 亿美元 / ROE 101.49% /
+    存货 214.03 亿美元）; FY2024、FY2025 数值不变。检查点总数仍为 27。

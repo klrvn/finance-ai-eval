@@ -1,6 +1,6 @@
 calculator_id: financial_data_snapshot
 script: financial_data_snapshot.py
-version: "1.0"
+version: "1.1"
 family: data-retrieval
 deterministic: true
 network: false
@@ -28,15 +28,16 @@ outputs:
   - POPMART_2025_net_profit
   - POPMART_2025_roe
   - POPMART_2025_inventory
-  - NVDA_2023_net_profit
-  - NVDA_2023_roe
-  - NVDA_2023_inventory
+  # NVDA window is FY2024/FY2025/FY2026 (fiscal year ends late January of the next calendar year)
   - NVDA_2024_net_profit
   - NVDA_2024_roe
   - NVDA_2024_inventory
   - NVDA_2025_net_profit
   - NVDA_2025_roe
   - NVDA_2025_inventory
+  - NVDA_2026_net_profit
+  - NVDA_2026_roe
+  - NVDA_2026_inventory
 side_outputs: []
 needs_market_data: false
 self_check: "emits self_check{passed}; verifies all 27 values present, numeric, finite, ROE within plausible band"
@@ -47,9 +48,14 @@ calibers:
 rounding: "net_profit/inventory -> 2 decimals; roe -> 2 decimals of percent"
 data_cutoff: "2026-07-20"
 companies:
-  ZTE: "中兴通讯 000063.SZ (A股/深交所, CNY 亿元)"
-  POPMART: "泡泡玛特 09992.HK (港股/港交所, CNY 亿元)"
-  NVDA: "英伟达 NVDA.O (美股/纳斯达克, USD 亿美元; 财年1月末结束)"
+  ZTE: "中兴通讯 000063.SZ (A股/深交所, CNY 亿元; 2023FY/2024FY/2025FY, 自然年)"
+  POPMART: "泡泡玛特 09992.HK (港股/港交所, CNY 亿元; 2023FY/2024FY/2025FY, 自然年)"
+  NVDA: "英伟达 NVDA.O (美股/纳斯达克, USD 亿美元; FY2024/FY2025/FY2026, 财年1月末结束)"
+fiscal_years:
+  # The three-year window is per company, not global (v1.1).
+  ZTE: ["2023", "2024", "2025"]
+  POPMART: ["2023", "2024", "2025"]
+  NVDA: ["2024", "2025", "2026"]
 migration_note: >
   v1.0: snapshot-to-GT calculator. Ground truth is a FROZEN answer key from company filings,
   packed as an embedded constant (nothing to fetch — the three figures are definite reported
@@ -57,3 +63,9 @@ migration_note: >
   emits a structural self_check (completeness + numeric sanity). --snapshot optionally overrides
   the embedded key with an updated one of the same nested shape. Mirrors S9's legacy v1.0
   snapshot mode but network-free and with no cross-derivation (independent filing figures).
+  v1.1: the fiscal-year window became PER COMPANY. NVIDIA's fiscal year ends in late January of
+  the next calendar year, so as of the 2026-07-20 cutoff its latest three reported fiscal years
+  are FY2024/FY2025/FY2026 — v1.0 used FY2023/FY2024/FY2025, one year too early. NVDA_2023_*
+  checkpoints were replaced by NVDA_2026_* (net_profit 1200.67 亿美元 / roe 101.49% /
+  inventory 214.03 亿美元); FY2024 and FY2025 values are unchanged. ZTE/POPMART are unaffected
+  (calendar-year filers, still 2023/2024/2025). Count stays 27.
