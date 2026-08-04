@@ -25,9 +25,23 @@ Write this registry to disk immediately so downstream steps have an authoritativ
 ```
 Save as `<runDir>/work_registry.json` after you stamp the run dir in step 2.
 
-## 1. Resolve the plugin root
-Run `echo "$CLAUDE_PLUGIN_ROOT"` in Bash. Call the result `<ROOT>`. If empty, use this
-repository's root as `<ROOT>`.
+## 1. Resolve the plugin root — in ONE Bash call, then stop looking
+
+If the invocation already told you the plugin root, use it and skip this step entirely.
+
+Otherwise resolve it with a **single** Bash call that tries every location at once:
+
+```bash
+for p in "$CLAUDE_PLUGIN_ROOT" \
+         "$HOME/.claude/plugins/cache/eval-judge-marketplace/eval-judge/1.3.0" \
+         "$HOME/Documents/eval-judge" ; do
+  [ -f "$p/taskspecs/registry.json" ] && { echo "ROOT=$p"; break; }
+done
+```
+
+Take the first hit as `<ROOT>`. **Do not** keep probing with `ls`/`find` afterwards — a prior run
+burned **2.2 minutes over 16 Bash calls** hunting for this because `$CLAUDE_PLUGIN_ROOT` was empty.
+One call, first hit, move on. Only if all candidates miss, ask the user for the path.
 
 ## 2. Confirm the container is registered and frozen
 Read `<ROOT>/taskspecs/registry.json`. Find the task id, note its container directory and
@@ -139,6 +153,7 @@ Task(
     task_id: <task-id>
     plugin_root: <ROOT>
     work_file: <runDir>/Work_X/work.md
+    out_path:  <runDir>/Work_X/judge_1.json
     prompt_text: <verbatim promptText>
     rubric_weights: <JSON of rubricWeights>
     judge_notes: <verbatim judgeNotes>
@@ -149,11 +164,15 @@ Task(
 
     Deduction scoring: D1-D6 start at 4; register {issue, severity, points, evidence};
     minor -0.5 / major -1 / severe -2; level = max(0, 4-sum).
-    Return levels and deductions per dimension.
+
+    WRITE your ledger JSON yourself to out_path with the Write tool, then reply with
+    ONE line confirming it (e.g. 'wrote judge_1.json — D1..D6 = 3.5/3/4/3/2/3').
+    Do NOT return the ledger as text for the orchestrator to re-write.
   "
 )
 ```
-Judge 2 is identical with `(Independent second pass — reason from scratch.)` appended.
+Judge 2 is identical with `out_path: <runDir>/Work_X/judge_2.json` and
+`(Independent second pass — reason from scratch.)` appended.
 
 ### Isolation rules for the judge prompt — non-negotiable
 
@@ -167,14 +186,31 @@ Judge 2 is identical with `(Independent second pass — reason from scratch.)` a
 - The judge has `tools: Read` only — no Bash/Glob/Grep — so it cannot discover GT or checkpoint
   files on disk even though they sit in the same run directory.
 
-### 7b. Collect and persist
+### 7b. Verify — do NOT re-write the ledgers
 
-Once all 3N return: for each work write `judge_1.json` and `judge_2.json` into
-`<runDir>/Work_X/` as `{levels, deductions, rationale, evidence, notes}` — the shape
-`aggregate.py` reads (see `agents/eval-rubric-judge.md` for a worked example). Set
-`needsReview` when the two judges differ by more than one level on any dimension.
+Each judge writes its own `judge_N.json` (that's why it gets `out_path`). Your job is only to
+confirm all 2N files exist, in **one** Bash call:
 
-If a single subagent fails, **retry just that one** — the others' artifacts are already on disk.
+```bash
+RUN="<runDir>"; for w in Work_A Work_B Work_C Work_D; do
+  for j in 1 2; do
+    f="$RUN/$w/judge_$j.json"
+    [ -s "$f" ] && python -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$f" \
+      && echo "ok   $w/judge_$j.json" || echo "MISS $w/judge_$j.json"
+  done
+done
+```
+
+> ⛔ **Never hand-write a Python script to persist ledgers, and never re-emit ledger JSON
+> yourself.** A prior run did exactly that — 35.6 KB of generated Python across
+> `_write_judges_A.py` / `_write_judges_BCD.py` / `_cf_audit.py` — which cost **~6 minutes of
+> pure token emission** (one 23.5 KB write alone took 3.9 min) and made this phase 45% of total
+> runtime. The judges already wrote the files. Read them if you need the levels; don't rebuild them.
+
+Then read the 2N files to compute `needsReview`: any dimension where the two judges for the same
+work differ by more than one level.
+
+If a single subagent fails, **retry just that one** — every other artifact is already on disk.
 Only if `Task` is entirely unavailable, run the steps inline and mark
 `blind_isolation: "self"` (weaker).
 

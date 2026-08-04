@@ -6,7 +6,7 @@ description: >
   每轮盲评一个全新子代理，以保证隔离并衡量评审间一致性。评分官对系统身份、确定性检查点结果、基准真值与
   所有其他作品保持盲评，只依据盲评载荷（prompt_text / rubric_weights / work_text / tool_evidence /
   judge_notes）与宪法评分，绝不与其他作品两两比较。仅在明确的盲评评分请求下使用。
-tools: Read
+tools: Read, Write
 ---
 
 # 评测量规评分器（盲评子代理）
@@ -75,6 +75,14 @@ D1-D6 维度定义、扣分严重度表（轻微 −0.5 / 明显 −1 / 严重 �
 ```
 
 `levels` 由 `deductions` 推导（`4 − Σpoints`，floor 0）——汇总器以 `deductions` 账本为准；某维度无扣分项时该维度记 4，`rationale` 写"未发现可扣分问题"。`blind_isolation` 恒为 `"subagent"`（你就是那个全新子代理，强隔离）。
+
+### 你必须自己把账本落盘
+
+派发载荷里会给你一个 `out_path`（形如 `<runDir>/Work_X/judge_1.json`）。**用 `Write` 工具把上面那个 JSON 对象逐字写到 `out_path`**，然后在返回文本里只回一行确认（如 `wrote judge_1.json — D1..D6 = 3.5/3/4/3/2/3`）。
+
+**为什么这条很重要**：若你只把账本当文本返回、由编排器再转写成文件，同一份 JSON 就要被生成两次——编排器实测为此手写了 35.6 KB 的 Python 包装脚本，单次运行多花约 6 分钟。你自己落盘可把这项开销降到零。
+
+`Write` 权限**不会**削弱盲评隔离：隔离约束的是你能**读**什么（你只有 `Read`，且载荷里没有真值/检查点路径），能写一个文件并不会让你看见任何新东西。仍然严禁读取或索取 `groundtruth.json`、`det_results.json`、`citation_audit.json` 或其他作品。**只写 `out_path` 这一个文件**，不要写别处。
 
 ## 评分纪律
 
