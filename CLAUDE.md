@@ -9,8 +9,10 @@ verification + blind rubric scoring, and emits a uniform, evidence-backed scorec
 ```
 Layer 1  宪法   rubrics/constitution.md      Immutable principles: D1-D6, deduction scoring, CF1-5, blind isolation
 Layer 2  引擎   skills/eval-*                Task-agnostic engines; read containers via contracts, contain zero task knowledge
-                agents/eval-judge.md         Orchestrator persona (subagent)
-                agents/eval-rubric-judge.md  Blind rubric-scoring subagent (isolated; dispatched via Task tool)
+                commands/eval-judge.md       PIPELINE SPEC — single source of truth for step order + dispatch
+                agents/eval-judge.md         Dispatcher persona (subagent entry point)
+                agents/eval-pipeline.md      Per-work GT-informed pipeline subagent (N in parallel)
+                agents/eval-rubric-judge.md  Blind rubric-scoring subagent (Read-only; 2N in parallel)
 Layer 3  容器   taskspecs/<task>/            One self-contained frozen container per task; indexed by taskspecs/registry.json (currently S1-S11)
 ```
 
@@ -36,31 +38,42 @@ constitution, containers, and calculator scripts live in the **plugin directory*
 - If `$CLAUDE_PLUGIN_ROOT` is empty (running from a checkout rather than an install), use this
   repository root as `<ROOT>`.
 
-## Hybrid orchestration (main conversation + enforced island)
+## Orchestration: dispatcher + 3×N parallel subagents
 
-`/eval-judge` runs most steps **inline in the main conversation** (intake, spec load, ground truth,
-per-work read + extract, CF audit, scorecard, report — each loads an `eval-*` skill directly, no
-subagent). It delegates ONLY the isolation-critical core — per work: deterministic checkpoint
-grading → citation/purity audit → **two blind rubric judges** → persist the two ledgers — to the
-enforced `Workflow` island `orchestration/eval-judge.workflow.js`. The island's code assembles a
-ground-truth-free judge payload and provably never routes ground truth / checkpoint results into it,
-so blind isolation is guaranteed structurally, not by prose discipline. Steps that don't need
-isolation stay inline to avoid subagent overhead.
+**`commands/eval-judge.md` is the single source of truth for the pipeline** — step order, parallel
+structure, and subagent dispatch. Do not restate the pipeline elsewhere; point at that file.
+
+The main conversation is a **pure dispatcher**. It runs only the shared sequential prefix (intake →
+run dir → spec → ground truth), then fans out **3 subagents per work, all in parallel**:
+
+- **N × `eval-pipeline`** (`agents/eval-pipeline.md`) — per work: read → extract → validate →
+  deterministic checkpoint grading → citation/purity audit. GT-informed; reads `groundtruth.json`.
+- **2N × `eval-rubric-judge`** (`agents/eval-rubric-judge.md`, `tools: Read`) — two independent
+  blind judges per work, on a GT-free payload.
+
+Then CF audit → scorecard → report run inline. Wall clock is `max(slowest subagent)`, not the sum.
+
+Blind judges need **no output** from the GT-informed pipeline, so they dispatch concurrently with it.
 
 ## Blind isolation (the anti-gaming property)
 
 Blind rubric scoring must run in a fresh context that has never seen ground truth / checkpoint
 results / citations.
 
-- **Primary (via `/eval-judge` command):** the Workflow island builds the GT-free payload in code
-  and fans out two fresh judge subagents — isolation is structural.
-- **Fallback (Workflow unavailable, or running via the `eval-judge` subagent, which has no Workflow
-  tool):** dispatch the **`eval-rubric-judge` subagent** (`tools: Read` only) twice via
-  `Task(subagent_type: "eval-rubric-judge", …)`, passing only the purity-checked payload.
-- **Last resort (Task also unavailable):** score inline and mark `blind_isolation: "self"` (weaker).
+- **Primary:** the dispatcher builds the judge payload from a **field whitelist** — `task_id`,
+  `plugin_root`, `prompt_text`, `rubric_weights`, `judge_notes`, `tool_evidence`, `work_text` — and
+  dispatches `Task(subagent_type: "eval-rubric-judge", …)` twice per work. That agent has
+  `tools: Read` only: no Bash/Glob/Grep, so it cannot discover GT or checkpoint files on disk even
+  though they exist there. The whitelist is enforced by `eval-orchestrator` §3.
+- **Last resort (Task unavailable):** score inline and mark `blind_isolation: "self"` (weaker).
 
 Never build the judge payload in a context that holds ground truth and then score there — that is the
-one thing this architecture exists to prevent.
+one thing this architecture exists to prevent. The dispatcher DOES hold ground truth, so the
+whitelist in `eval-orchestrator` §3 is the gate: any field not on it is a leak.
+
+**An `eval-pipeline` agent must never dispatch its own judges** — it holds GT by the time it
+finishes grading, so judges spawned from it would inherit a contaminated parent. Only the
+dispatcher spawns judges.
 
 ## Python prerequisites
 

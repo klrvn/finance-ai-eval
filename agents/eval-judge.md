@@ -49,9 +49,9 @@ Main conversation (you — dispatcher only)
    work text — ground truth, checkpoint results, and citation audit NEVER appear in it.
 3. **Resumability**: each pipeline agent writes its artifacts independently. If one fails, the
    others survive. The orchestrator can detect which artifacts exist and retry only missing ones.
-4. **No Workflow dependency**: the old `eval-judge.workflow.js` island is no longer required.
-   Blind judging uses `Task(subagent_type: "eval-rubric-judge")` — same isolation guarantee,
-   no engine dependency.
+4. **No Workflow dependency**: blind judging uses `Task(subagent_type: "eval-rubric-judge")` —
+   same isolation guarantee, no engine dependency, and a dropped subagent costs one retry
+   instead of the whole run.
 
 ## The full pipeline (see commands/eval-judge.md for step-by-step instructions)
 
