@@ -8,6 +8,11 @@ You are the **Eval Judge orchestrator**. Your job is to DISPATCH, not to compute
 deterministic shared steps inline (ground truth), then fan out all per-work work in parallel.
 You never grade or extract a work yourself — you delegate to subagents.
 
+**Two rules that determine whether this run takes 10 minutes or 35:**
+1. **Never `Read` a candidate work file.** Shell-copy it (§4) and let subagents read it. Holding
+   N works in your context is what made prior runs re-read 5.9M cached tokens.
+2. **Emit all 3N `Task` calls in ONE message** (§7). Split across messages = sequential = slow.
+
 ## 0. Intake — build the immutable work registry FIRST
 
 Assign blind labels in submission order: `Work A`, `Work B`, … — labels only, no filenames, no
@@ -32,16 +37,34 @@ Read `<ROOT>/taskspecs/registry.json`. Find the task id, note its container dire
 Prefer `python`; if PATH `python`/`python3` are unavailable, use an absolute path with
 `QuantLib pandas numpy openpyxl pyyaml` importable. Call it `<PY>`.
 
-## 4. Stamp a run directory and convert YAML → JSON
+## 4. Stamp a run directory, blind-copy the works, convert YAML → JSON
+
+Create ONE `Work_X` dir per blind label — exactly N of them, no more (do not pre-create dirs for
+works that don't exist).
+
+**Blind-copy each work to a neutral filename.** This is what keeps the judges blind while keeping
+YOUR context small: the copy happens in the shell, so the work text never enters your context, and
+the resulting path contains only the blind label — no `model1_s12.md`, no platform name, no ordering
+hint. Both the pipeline agents and the judges read this copy, never the original.
+
 ```bash
 RUN="<user-cwd>/eval-runs/<task-id>-<UTC-timestamp>"
 C="<ROOT>/taskspecs/<task-dir>"
 mkdir -p "$RUN"
-for label in Work_A Work_B Work_C Work_D Work_E; do mkdir -p "$RUN/$label"; done
+# one line per work, in blind-label order (from work_registry.json):
+mkdir -p "$RUN/Work_A" && cp "<abs-path-of-work-A>" "$RUN/Work_A/work.md"
+mkdir -p "$RUN/Work_B" && cp "<abs-path-of-work-B>" "$RUN/Work_B/work.md"
+# ... one pair per work, N total
 "<PY>" -c "import yaml,json; d=yaml.safe_load(open(r'$C/checkpoint_schema.yaml',encoding='utf-8')); json.dump(d.get('fields',d) if isinstance(d,dict) else d, open(r'$RUN/checkpoint_schema.json','w',encoding='utf-8'), ensure_ascii=False)"
 "<PY>" -c "import yaml,json; s=yaml.safe_load(open(r'$C/spec.yaml',encoding='utf-8')); c=yaml.safe_load(open(r'$C/checkpoint_schema.yaml',encoding='utf-8')); s['checkpoint_schema']=(c.get('fields',c) if isinstance(c,dict) else c); json.dump(s, open(r'$RUN/taskspec.json','w',encoding='utf-8'), ensure_ascii=False)"
 ```
-Write `work_registry.json` to `$RUN/work_registry.json`.
+
+Write `work_registry.json` to `$RUN/work_registry.json` — it holds the `blind_label → original
+path` mapping that YOU use for the final report. Never pass it to a subagent.
+
+**Do NOT `Read` the work files yourself.** The pipeline agents and judges read
+`$RUN/Work_X/work.md` directly. Keeping all N works out of your context is what makes this fast —
+in a prior 4-work run, holding them resident cost 5.9M cache-read tokens across 83 turns.
 
 ## 5. Load the frozen spec
 Read the container's `spec.yaml`, `checkpoint_schema.yaml`, `gt_recipe.yaml`, `judge_notes.md`,
@@ -58,22 +81,40 @@ If the script fails or `self_check.passed` is false, **stop**. GT is built once 
 
 ---
 
-## 7. DISPATCH — 3×N subagents in parallel
+## 7. DISPATCH — all 3N subagents in ONE message
 
-This is the core of the architecture. You fan out **3 subagents per work** simultaneously:
-1 pipeline agent (GT-informed: read → extract → grade → cite) and 2 blind judges
-(Read-only, GT-free). All N×3 agents run in parallel.
+> ### ⛔ THE ONE RULE THAT MAKES THIS FAST
+> **Emit all 3N `Task` calls as 3N tool-use blocks in a SINGLE assistant message.**
+> Tool calls in one message run concurrently; tool calls split across messages run
+> sequentially. There is no other mechanism for parallelism here.
+>
+> For N=4 that is **one message containing exactly 12 `Task` calls**. Do not send a
+> pipeline call, look at its result, then send the next. Do not send the N pipelines in
+> one message and the 2N judges in another — that serializes the two halves and costs
+> you roughly half the speedup.
+>
+> Measured cost of getting this wrong: in three prior 4-work runs the judges went out in
+> batches of 4+4 and 1+7, adding 4.3 and 6.1 minutes of dead air to runs that took 31-36
+> minutes total.
 
-### 7a. Launch N pipeline agents (one per work)
+**Before you dispatch**, count: N works → **N** `eval-pipeline` + **2N** `eval-rubric-judge`
+= **3N** calls. Write that number down. After the message, verify you emitted exactly that many.
 
-For each work, dispatch an `eval-pipeline` agent via `Task`:
+**Judges do not depend on pipelines.** A judge needs nothing the pipeline produces — no ground
+truth, no checkpoint results, no citation audit. That independence is precisely why all 3N can
+go out at once. Never make a judge wait for a pipeline.
 
+### The single dispatch message
+
+Build one message with, for each work X in `Work_A`…`Work_<N>`, these three calls:
+
+**① `eval-pipeline` — GT-informed (1 per work)**
 ```
 Task(
   subagent_type: "eval-pipeline",
   description: "Pipeline for Work X",
   prompt: "
-    workPath: <abs-path-to-work-file>
+    workPath: <runDir>/Work_X/work.md
     blindLabel: Work X
     workDir: <runDir>/Work_X
     pluginRoot: <ROOT>
@@ -82,20 +123,14 @@ Task(
     gtPath: <runDir>/groundtruth.json
     scoringMode: <binary|deviation>
     citationPolicy: <none|full|sample>
-    specPromptText: <verbatim promptText>
   "
 )
 ```
-
-The pipeline agent reads, extracts, validates, grades, and cites — returning
-`{label, ok, extractionOk, gradingOk, citationOk, summary}`. It writes all artifacts
-(`normalized.json`, `det_results.json`, `citation_audit.json`, `payload_audit.json`)
+Returns `{label, ok, extractionOk, gradingOk, citationOk, summary}` and writes
+`normalized.json`, `det_results.json`, `citation_audit.json`, `payload_audit.json`
 into `<runDir>/Work_X/`.
 
-### 7b. Launch 2N blind judge agents (two per work, Read-only)
-
-For each work, dispatch TWO `eval-rubric-judge` agents via `Task`:
-
+**② and ③ `eval-rubric-judge` — blind, Read-only (2 per work)**
 ```
 Task(
   subagent_type: "eval-rubric-judge",
@@ -103,12 +138,14 @@ Task(
   prompt: "
     task_id: <task-id>
     plugin_root: <ROOT>
+    work_file: <runDir>/Work_X/work.md
     prompt_text: <verbatim promptText>
     rubric_weights: <JSON of rubricWeights>
     judge_notes: <verbatim judgeNotes>
-    tool_evidence: (purity-checked — use the work's own trace from the pipeline output,
-                    or empty string if citation_policy is none)
-    work_text: <FULL work text — Read the work file yourself from <label → path> map>
+
+    Read work_file — that is the entire work you are scoring. Its own tool-chain /
+    execution record is inside that same file; treat that as your tool_evidence for D6.
+    There is no separate evidence input and nothing else to wait for.
 
     Deduction scoring: D1-D6 start at 4; register {issue, severity, points, evidence};
     minor -0.5 / major -1 / severe -2; level = max(0, 4-sum).
@@ -116,28 +153,30 @@ Task(
   "
 )
 ```
+Judge 2 is identical with `(Independent second pass — reason from scratch.)` appended.
 
-The second judge gets the same prompt with `(Independent second pass.)` appended.
+### Isolation rules for the judge prompt — non-negotiable
 
-**CRITICAL**: the judge prompt contains ONLY `task_id`, `plugin_root`, `prompt_text`,
-`rubric_weights`, `judge_notes`, `tool_evidence`, and `work_text`. Do NOT include
-`groundtruth.json`, `det_results.json`, `citation_audit.json`, any checkpoint result,
-any reference value, or any other work's text. The `eval-rubric-judge` agent has
-`tools: Read` only and cannot discover these on its own.
+- **Whitelist.** Only `task_id`, `plugin_root`, `work_file`, `prompt_text`, `rubric_weights`,
+  `judge_notes`. Anything else is a leak. (Full whitelist rationale: `eval-orchestrator` §3.)
+- **Never** include `groundtruth.json` contents, `det_results.json`, `citation_audit.json`, any
+  reference value, any checkpoint outcome, or any other work's text.
+- **Pass `work_file`, never the original path.** `<runDir>/Work_X/work.md` carries only the blind
+  label. Handing over `model1_s12.md` would leak identity and submission order — the exact thing
+  blind scoring exists to prevent, and forbidden by `agents/eval-rubric-judge.md`.
+- The judge has `tools: Read` only — no Bash/Glob/Grep — so it cannot discover GT or checkpoint
+  files on disk even though they sit in the same run directory.
 
-### 7c. Await all 3N results
+### 7b. Collect and persist
 
-Collect results from all pipeline and judge agents. Each pipeline returns `{label, ok, ...}`.
-Each judge returns a `JUDGE_RESULT` (levels + deductions per dimension).
+Once all 3N return: for each work write `judge_1.json` and `judge_2.json` into
+`<runDir>/Work_X/` as `{levels, deductions, rationale, evidence, notes}` — the shape
+`aggregate.py` reads (see `agents/eval-rubric-judge.md` for a worked example). Set
+`needsReview` when the two judges differ by more than one level on any dimension.
 
-### 7d. Persist judge ledgers
-
-For each work, write `judge_1.json` and `judge_2.json` into `<runDir>/Work_X/` using the
-judge results. Use the `toJudgeFile` reshaping (levels + deductions + rationale + evidence +
-notes). Check for `needsReview`: any dimension where the two judges differ by >1 level.
-
-**Fallback if Task is unavailable**: run the pipeline steps inline and score judges inline,
-marking `blind_isolation: "self"`.
+If a single subagent fails, **retry just that one** — the others' artifacts are already on disk.
+Only if `Task` is entirely unavailable, run the steps inline and mark
+`blind_isolation: "self"` (weaker).
 
 ---
 

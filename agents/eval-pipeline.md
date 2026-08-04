@@ -16,7 +16,7 @@ of you handles a different work. Do not communicate with other subagents or wait
 
 ## Input (passed in your prompt by the orchestrator)
 
-- `workPath` — absolute path to the candidate work file
+- `workPath` — `<runDir>/Work_X/work.md`, the blind-labelled copy of the work
 - `blindLabel` — blind label for this work (e.g. "Work A")
 - `workDir` — absolute path to `<runDir>/Work_X/` where artifacts go
 - `pluginRoot` — absolute path to the eval-judge plugin root
@@ -25,12 +25,13 @@ of you handles a different work. Do not communicate with other subagents or wait
 - `gtPath` — `<runDir>/groundtruth.json`
 - `scoringMode` — `binary` or `deviation` (pass `--scoring-mode deviation` if deviation)
 - `citationPolicy` — `none`, `full`, or `sample`
-- `specPromptText` — verbatim prompt given to the candidate (for context only; no need to re-read)
 
 ## Steps
 
 ### 1. Read the work
 `Read(workPath)` → the full candidate answer text. This is `workText`.
+`workPath` is already the blind copy under `<runDir>/Work_X/` — do not go looking for an
+original elsewhere, and do not read any other work's file. You handle exactly one work.
 
 ### 2. Extract checkpoint fields
 Invoke the `eval-extractor` skill, reading from `workText` and the checkpoint schema at
