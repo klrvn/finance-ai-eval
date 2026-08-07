@@ -15,7 +15,7 @@
     "calculator": "data_retrieval_snapshot.py v2.5 (Live API + cross-source check, 4 questions)"
   },
   "review_status": "frozen",
-  "container_hash": "pending_recompute",
+  "container_hash": "14d96ab90653b8e5",
   "data_provisioned": {
     "mode": "live_api",
     "gt_kind": "calculator",

@@ -1,0 +1,84 @@
+recipe_id: fab_capex_anchors
+kind: calculator
+
+calculator:
+  script: skills/eval-groundtruth/scripts/fab_capex_anchors.py
+  sidecar: skills/eval-groundtruth/scripts/fab_capex_anchors.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    # 设备厂商 2025 年营业收入（亿元）—— 相对弹性的分母基数，D1 第一层的 9 个外部锚点
+    - naura_revenue_2025
+    - amec_revenue_2025
+    - acmr_revenue_2025
+    - piotech_revenue_2025
+    - mattson_revenue_2025
+    - hwatsing_revenue_2025
+    - jingce_revenue_2025
+    - skyverse_revenue_2025
+    - kingsemi_revenue_2025
+    # 招股书与股权锚点
+    - cxmt_planned_raise
+    - cxmt_equip_capex_prospectus
+    - naura_kingsemi_stake
+    # 时效性探针：长存三期国产设备采购占比（带中值）
+    - ymtc_phase3_localization
+  side_outputs:
+    # 写入 provenance 供人工审计，不作为检查点
+    - cxmt_use_of_proceeds_total
+
+# ---------------------------------------------------------------------------
+# 【关键】percent_fields 故意不声明
+# ---------------------------------------------------------------------------
+# 提取器的 validators.py 会把任何带 '%' 单位的作答值规范化为 FRACTION
+# （"17.87%" -> 0.1787）。本计算器输出的两个比例型 GT（naura_kingsemi_stake、
+# ymtc_phase3_localization）**已经是 fraction 刻度**，与提取器同刻度，无需换算。
+# 若在此声明 percent_fields，gt_dispatch.apply_percent_canon 会把 GT 再除一次 100
+# （0.1787 -> 0.001787），这两个检查点将必然失败。
+# 其余 11 个 GT 均为「亿元」金额，与百分比刻度无关。
+# ---------------------------------------------------------------------------
+
+self_check: required        # self_check.passed 为假即停止评测
+
+inputs_required:
+  - name: groundtruth_snapshot.json
+    optional: true
+    na_policy: "可选（override）；默认 GT 为计算器内嵌的冻结锚点键，网络无关，不需要此文件"
+
+fixtures:
+  dir: fixtures
+  files:
+    snapshot: groundtruth_snapshot.json   # 内嵌锚点键的可读镜像 / 可选 override
+  design_note: >
+    本 recipe 的真值**只覆盖输入锚点，不覆盖模型输出**——这是本容器最重要的设计约束，
+    与 S12（同一 benchmark 的 irab-004 迁移）同源但更极端。
+
+    有真值的部分（13 个键，全部是 as-of 2026-06-13 的冻结确定事实）：
+
+    第一类，9 家国产设备厂商的 2025 年营业收入。题面要求把公司订单增量换算成相对该公司
+    营收的弹性，所以这 9 个数是**作品必须取到的输入**，不是可选背景。gold 对这一类
+    自标容差 ±2%，故检查点用 rel:true tol:0.02。万业企业刻意不设检查点——gold 明确
+    标注其 2025 营收未取得可信结构化数据，正确行为是留空或标「待查」，给它设真值会
+    惩罚诚实、奖励编造。
+
+    第二类，长鑫科技 IPO 的两个招股书锚点（拟募资 295 亿、募投项目设备购置及安装费
+    220.66 亿）与北方华创持有芯源微的股权比例（17.87%）。前两个是校验单万片设备单价
+    假设的 fab 级强度锚，后一个是公司层分摊去重的依据。
+
+    第三类，时效性探针：长江存储武汉三期新产线的国产设备采购占比。gold 把它列为
+    「必须反映的极新事实」——2026-04 首次超过 50%，显著高于国内晶圆厂平均 15-30%。
+    这是一个**阈值型**事实而非点值，故 GT 取带中值 0.55、容差 0.15，通过带 [0.40, 0.70]：
+    接受当期口径的各种表述，把陈旧的行业平均口径挡在外面。
+
+    **不属于本 recipe 的真值**：模型的真正输入与全部输出。
+
+      · 单万片设备投资单价：先进 DRAM 的两套口径相差 2.8 倍（广发「非 HBM 先进 DRAM
+        前道设备」约 25-30 亿 vs 经观援引产业投资人的 70 多亿），系节点/产品与
+        「前道设备 vs 含配套」的口径差异所致，不存在唯一正确值。
+      · 各工艺环节价值量占比、各环节国产化率、各公司在各环节的国产内部份额：gold 全部
+        以区间给出，且明确写着公司份额「未公开披露，须作透明假设、不得编造点值」。
+      · 由上述假设算出的一切金额（环节设备额、环节国产额、公司订单增量、双厂合计）。
+
+    给这些设点值 GT 会使评分方向反转：惩罚「标区间、标口径、标假设」这一 gold 明确
+    要求的正确行为，同时放行一个恰好撞对了中值却毫无口径纪律的伪精确答案。因此输出层
+    一律以内部一致性类型（reconcile / consistency / sum_to）承载——本容器测的是
+    「锚点取对了 × 级联自洽」两件正交的事，而不是「你的数是否等于我的数」。

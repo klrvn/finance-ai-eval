@@ -1,0 +1,100 @@
+task_id: S14
+version: 1.0.0
+family: market-drawdown-retrospective
+tier: T1
+persona: 固收/转债研究员
+
+prompt_text: >
+  复盘中证转债指数2022年至2024年间经历的主要阶段性下跌（至少2个≥5%的回撤区间），请说明：
+  每轮下跌的起止时间节点、最大跌幅（%）、期间转股溢价率的收缩幅度（pct）和收缩逻辑（是正股
+  下跌被动压缩还是主动杀估值），以及随后估值修复回到前期水平所需的交易日数。并跨轮次分析：
+  转债估值修复速度与权益市场走势的依赖关系，以及什么条件下转债溢价率存在主动扩张vs被动压缩
+  的差异。
+
+measurable_outputs:
+  - 至少2轮(≥5%)回撤的起止时间节点、最大跌幅%、溢价率收缩幅度pct、收缩逻辑判定、修复交易日数
+  - 全文至少一处声明所用的转股溢价率口径(拟合百元/均值/算术平均)与指数口径(收盘/盘中)
+  - 跨轮次分析: 转债估值修复速度与权益市场走势的依赖关系
+  - 跨轮次分析: 转债溢价率主动扩张 vs 被动压缩的条件判断
+
+# ---------------------------------------------------------------------------
+# 权重: D1/D4 并列最高——本任务是"事实密度极高 + 判断深度要求极高"的复盘题,
+#   两者权重相当而非某一方主导(不同于 S12 的"一致性闭合优先"或 S9 的"取数准确优先")。
+#   D1:30 逐轮点位/日期/跌幅%/溢价率水平/修复天数, 40 个外部真值键锚定
+#   D2:20 溢价率口径纪律 + 峰谷-跌幅%互算一致性(gold facts 列为最高发陷阱)
+#   D3:15 题面点名的"轮次x五要素"网格是否齐备 + 两个跨轮问题是否正面回答
+#   D4:30 gold facts 的8个canonical推理角度(W型内部结构、主动/被动判定方法论、
+#         三类杀估值触发器辨析、修复速度对权益的依赖、范式变化视角等)——
+#         这些是纯判断, 任何检查点都无法覆盖, 只能由判官登记
+#   D5:0  研究复盘, 不涉及客户适配或投资建议
+#   D6:5  权重下限——历史点位/溢价率数据检索需要真实工具/数据源, 但不是本题主旨
+# ---------------------------------------------------------------------------
+rubric_weights: {D1: 30, D2: 20, D3: 15, D4: 30, D5: 0, D6: 5}
+
+objective_dims: [D1, D2]
+objective_scoring_mode: binary
+
+# T1 的适用范围说明:
+#   D1/D2 两个客观维度均有可执行的确定性真值路径——D1 由 40 个外部真值键锚定(逐轮
+#   峰谷点位/日期/收盘跌幅/基准对照收益率/拟合百元口径溢价率水平/修复交易日数/
+#   信用事件事实), D2 由 reconcile/consistency 检查点锚定(溢价率收缩pp、峰谷价格-
+#   跌幅%互算)。均值/算术平均口径的溢价率因 gold facts 数据不全, 不设第二条点值
+#   真值序列(不同于 S12 的沪深300 caliber gt_variants 场景——那里两条序列都完整)。
+#   D4(分析深度)权重最高但完全不在 objective_dims 内——这符合 T1 定义(只要求
+#   D1/D2 恰为客观维度, 不限制其他维度的权重), 也符合本任务"事实可核验、判断不可
+#   数值化"的真实结构。
+
+citation_policy: {mode: none}
+# 引用核验已关闭: D1 Layer 1 只看 grounding 检查点, 评测不再为核验引用而联网
+# (与 S9 同族做法——本任务的取数准确性已由 40 个外部真值键直接度量, 无需额外的
+# 引用抽样核验通道)。
+
+cf_rules: [CF1, CF3, CF4, CF5]
+# CF2(未引用主张)未启用——依赖引用审计, 而本任务已关闭引用核验(citation_policy: none)。
+# CF3(只描述不执行)启用——若候选作品只泛泛描述"转债经历过几轮下跌"而不给出任何
+#   可核验的数值(起止时间/跌幅%/溢价率数值), rounds_covered_count 与逐轮检查点会
+#   大量 NA/fail, 触发 CF3 将 D2+D3 封顶到等级1, 与 D1 因检查点大量失败/NA 而自然
+#   走低叠加, 精准打击"零数据复盘"这一失败模式。
+# CF4(陈旧数据当当前用)启用——本题窗口固定在2022-2024, 若候选作品用2025年及以后
+#   的数据(如2025年3月盘中438.92新高)冒充2022-2024期内状态, 属期外冒充, gold facts
+#   data_distortion #7 明确列为陷阱。
+cf_thresholds: {}
+
+# grounding_group_weights 未声明: 40 个 grounding 检查点等权。四轮之间检查点数量
+# 天然不均(R2的W型双腿比R3/R4多几个点位字段)——这不构成不公平: 候选作品若只
+# 实质复盘题面要求的"至少2轮", 未覆盖的轮次的检查点全部转NA并从分母剔除,
+# grounding基线自动退回到"只由已覆盖轮次的检查点构成"(与 S12 的处理方式一致)。
+
+required_inputs:
+  - name: groundtruth_snapshot.json
+    needed_for: "冻结快照(逐轮峰谷点位/日期/跌幅%/溢价率水平/修复天数/信用事件); 计算器已内嵌, 此文件为可读镜像/可选 override"
+    na_policy: "缺失不影响运行——计算器内嵌冻结答案键, 网络无关"
+
+task_validators:
+  - {name: round_identification, realized_by: "checkpoint rounds_covered_count(count_min, 至少2轮) + 逐轮 peak/trough date+price(grounding)"}
+  - {name: drawdown_arithmetic_closure, realized_by: "checkpoint R{n}_drawdown_price_consistency(consistency, 峰谷价格与自报跌幅%互算一致——gold facts 列为最高发陷阱的机械化版本)"}
+  - {name: premium_caliber_discipline, realized_by: "checkpoint R{n}_premium_caliber(present, 审计字段) + caliber_declared_global(present, methodology) + judge_notes D1/D2 第二层锚点"}
+  - {name: premium_compression_closure, realized_by: "checkpoint R{n}_premium_compression_pp(reconcile, 收缩pp与自报前后溢价率之差闭合)"}
+  - {name: w_shape_depth, realized_by: "checkpoint R2_leg1_low_*/R2_rebound_*/R2_trough_*(逐段点位, grounding) + R2_leg2_benchmark_return_pct(正股涨转债跌的脱钩腿) + judge_notes D4 锚点"}
+  - {name: valuation_price_recovery_divergence, realized_by: "checkpoint R4_recovery_days_point + R4_valuation_recovery_incomplete_noted(present, methodology) + judge_notes D4 锚点"}
+  - {name: credit_event_facts, realized_by: "checkpoint R4_credit_event_facts(set_match, 岭南/广汇/搜特三条标志性事实)"}
+  - {name: cross_round_questions_answered, realized_by: "checkpoint recovery_speed_equity_dependence_addressed + active_expansion_condition_addressed(present) + judge_notes D3/D4 锚点"}
+
+engine_requirements:
+  calculator: cb_index_drawdown
+  gt_kind: calculator
+  gt_version: "1.0"
+  checkpoint_types: [number, pct, present, count_min, reconcile, consistency, set_match]
+  tolerance_policy: >
+    日期(YYYYMM整数) tol 0——月份级精确匹配, 与题面"起止时间节点"要求对齐。
+    价格 tol 0.5%(rel)——多源点位读数的常见分歧量级。
+    收盘口径最大跌幅%/沪深300对照收益率% tol 1pp——gold facts 自身声明的容差。
+    拟合百元口径溢价率水平 tol 2.5pp——gold facts 声明"各家拟合方法读数差异可达
+    2-3pp"。
+    峰谷价格-跌幅%互算一致性(consistency) tol 1pp, 溢价率收缩pp闭合(reconcile)
+    tol 1.5pp——均为候选作品自己已报数值间的内部自洽关系, 不读取外部真值。
+    修复交易日数 tol 15%(rel), 除 R2(gold facts 给出较宽区间64-123, 容差放宽至35%rel)。
+    信用事件事实(set_match) tol 1——3条标志性事实允许缺1条。
+  data_fetch_mode: "frozen_snapshot(网络无关, 计算器内嵌冻结逐轮点位, 来源为 IRAB irab-011 gold facts)"
+  min_grader_version: "1.1"
+  min_aggregator_version: "2.3"

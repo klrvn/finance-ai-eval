@@ -16,6 +16,12 @@ Sampling:      sample_verify                           (sampled cells vs supplie
 Structural / internal types were previously punted to NA; they are now fully evaluated so that the
 core substance of tasks like S4 (per-sector attribution), S1 (valuation reconciliation + sensitivity
 monotonicity), S5 (top-5 loss contributors) and S2 (NAV reproduction) is actually graded.
+
+Multi-convention ground truth (`gt_variants`): a scalar checkpoint may declare several candidate
+ground-truth keys, one per legitimate convention, plus a routing field naming which one a work used
+(see resolve_gt_variants). This keeps tolerances tight for quantities that have more than one lawful
+convention -- S12's CSI300 leg, where total-return and price-index are both valid ETF-leg calibers
+and one tolerance covering both would lose all discriminatory power.
 """
 import argparse, ast, json, operator, sys
 
@@ -212,6 +218,89 @@ def gt_lookup(gt, field):
     return (gt.get("values") or {}).get(field)
 
 
+def resolve_gt_variants(schema, extracted, gt):
+    """Decide, per routing field, which ground-truth variant a work was written against.
+
+    A checkpoint opts in by declaring:
+
+        gt_variants:
+          field: <routing_field>            # another checkpoint holding the variant name
+          map:   {<variant>: <gt_key>, ...} # candidate ground-truth keys
+
+    This exists for quantities with more than one *legitimate* convention, where grading a work
+    against the convention it did not use would be a false negative. S12's CSI300 leg is the
+    motivating case: total-return and price-index are both lawful ETF-leg calibers, so a single
+    tolerance wide enough for both would lose all discriminatory power. Routing lets each work be
+    measured against its own caliber at a tight tolerance.
+
+    Resolution order per routing field:
+      1. ``declared``   -- the routing field was extracted as a recognized variant name.
+      2. ``inferred``   -- no usable declaration: choose the variant whose ground-truth series
+                           minimizes TOTAL absolute deviation across every checkpoint sharing the
+                           routing field. Deliberately resolved once for the whole group rather
+                           than per checkpoint: per-checkpoint inference would let a work be graded
+                           against total-return in one year and price-index in the next, scoring
+                           better than either convention alone.
+      3. ``unresolved`` -- nothing numeric to infer from; callers mark those checkpoints NA.
+
+    Inference decides only *what to measure against*. Whether failing to declare a convention is
+    itself a defect is a rubric question, left to the blind judges' deduction anchors.
+
+    Returns {routing_field: {"choice": <variant|None>, "basis": <str>, ...}}.
+    """
+    groups = {}
+    for field, meta in schema.items():
+        if not isinstance(meta, dict):
+            continue
+        gv = meta.get("gt_variants")
+        if isinstance(gv, dict) and gv.get("field") and isinstance(gv.get("map"), dict) and gv["map"]:
+            groups.setdefault(gv["field"], []).append((field, gv["map"]))
+
+    resolution = {}
+    for routing_field, members in groups.items():
+        variants = sorted({v for _, vmap in members for v in vmap})
+
+        entry = extracted.get(routing_field) or {}
+        declared = entry.get("value") if isinstance(entry, dict) and entry.get("status") == "value" else None
+        if isinstance(declared, str) and declared in variants:
+            resolution[routing_field] = {"choice": declared, "basis": "declared", "variants": variants}
+            continue
+
+        # No usable declaration -> infer from the numbers, group-wide.
+        totals = {v: 0.0 for v in variants}
+        counts = {v: 0 for v in variants}
+        for field, vmap in members:
+            e = extracted.get(field) or {}
+            if not isinstance(e, dict) or e.get("status") != "value":
+                continue
+            val = _num(e.get("value"))
+            if val is None:
+                continue
+            for v in variants:
+                truth = _num(gt_lookup(gt, vmap.get(v)))
+                if truth is None:
+                    continue
+                totals[v] += abs(val - truth)
+                counts[v] += 1
+
+        comparable = [v for v in variants if counts[v]]
+        if not comparable:
+            resolution[routing_field] = {
+                "choice": None, "basis": "unresolved", "variants": variants,
+                "note": "no declared variant and no comparable extracted values",
+                "declared_value": declared,
+            }
+            continue
+        best = min(comparable, key=lambda v: (totals[v], v))
+        resolution[routing_field] = {
+            "choice": best, "basis": "inferred", "variants": variants,
+            "declared_value": declared,
+            "total_abs_deviation": {v: round(totals[v], 8) for v in comparable},
+            "n_compared": counts[best],
+        }
+    return resolution
+
+
 def _deviation_score(delta, tol, max_dev):
     """Continuous deviation-based score: 1.0 at-or-below tol, linear decay to 0 at max_dev.
 
@@ -239,6 +328,9 @@ def main():
     gt = json.load(open(a.groundtruth, encoding="utf-8")) if a.groundtruth else {}
     ex = norm.get("extracted") or norm.get("fields") or {}
     env = build_env(ex)
+    # Resolve multi-convention ground-truth routing once, group-wide, before any grading.
+    # No-op for schemas that never declare gt_variants.
+    variant_resolution = resolve_gt_variants(schema, ex, gt)
     scoring_mode = a.scoring_mode
 
     checks, na, cf5 = {}, [], []
@@ -384,12 +476,38 @@ def main():
             continue
 
         # --- scalar numeric vs ground truth ---
-        truth = gt_lookup(gt, field)
+        # gt_variants: this checkpoint may have several candidate GT keys, one per legitimate
+        # convention. Pick the one matching the convention this work was written against.
+        gt_key, variant_note = field, None
+        gv = meta.get("gt_variants")
+        if isinstance(gv, dict) and isinstance(gv.get("map"), dict) and gv["map"]:
+            res = variant_resolution.get(gv.get("field")) or {}
+            choice = res.get("choice")
+            if not choice:
+                record(field, None, {"result": "NA",
+                                     "note": f"gt_variants unresolved via {gv.get('field')!r}: "
+                                             f"{res.get('note', 'no variant determined')}"},
+                       grounding, methodology)
+                continue
+            gt_key = gv["map"].get(choice)
+            variant_note = {"variant": choice, "basis": res.get("basis"), "gt_key": gt_key,
+                            "routed_by": gv.get("field")}
+            if gt_key is None:
+                record(field, None, {"result": "NA",
+                                     "note": f"gt_variants map has no entry for variant {choice!r}",
+                                     "gt_variant": variant_note},
+                       grounding, methodology)
+                continue
+        truth = gt_lookup(gt, gt_key)
         if truth is None:
-            record(field, None, {"result": "NA", "note": "no ground truth"}, grounding, methodology)
+            record(field, None, {"result": "NA", "note": "no ground truth",
+                                 **({"gt_variant": variant_note} if variant_note else {})},
+                   grounding, methodology)
             continue
         if status != "value" or val is None:
-            record(field, False, {"result": "fail", "note": "missing extracted value"}, grounding, methodology)
+            record(field, False, {"result": "fail", "note": "missing extracted value",
+                                  **({"gt_variant": variant_note} if variant_note else {})},
+                   grounding, methodology)
             continue
         ok, delta = compare_scalar(float(val), float(truth), tol, rel, ftype, meta.get("decimals"))
         max_dev = None
@@ -399,7 +517,8 @@ def main():
         record(field, ok, {"result": "pass" if ok else "fail",
                            "delta": round(delta, 8) if delta is not None else None,
                            "unit": "bp" if ftype == "bp" else "",
-                           "extracted": val, "ground_truth": truth},
+                           "extracted": val, "ground_truth": truth,
+                           **({"gt_variant": variant_note} if variant_note else {})},
                grounding, methodology,
                delta=delta, tol=tol, max_dev=max_dev)
 
@@ -414,6 +533,9 @@ def main():
         "na_checkpoints": na,
         "cf5_hits": cf5,
     }
+    # Audit trail: which convention each routed group was graded against, and how that was decided.
+    if variant_resolution:
+        out["gt_variant_resolution"] = variant_resolution
     # In deviation mode, also output continuous deviation-based fractions
     if scoring_mode == "deviation":
         out["deviation_fraction"] = round(dev_sum / dev_graded, 4) if dev_graded else None

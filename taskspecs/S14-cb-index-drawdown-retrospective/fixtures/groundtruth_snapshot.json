@@ -1,0 +1,46 @@
+{
+  "_comment": "Readable mirror of the calculator's embedded frozen constants (cb_index_drawdown.py). Optional override input, not required for the calculator to run -- default GT is embedded. Source: IRAB irab-011 gold facts (data/gold/irab-011.json), multi-source-consistent per those facts.",
+  "rounds": {
+    "R1": {
+      "peak_date": 202201, "peak_price": 437.69,
+      "trough_date": 202204, "trough_price": 384.40,
+      "max_drawdown_pct": -0.122,
+      "benchmark_return_pct": -0.231,
+      "premium_before_pct": 0.28,
+      "premium_after_pct": 0.18,
+      "recov_from_high": 119,
+      "recov_from_low": 77
+    },
+    "R2": {
+      "peak_date": 202208, "peak_price": 430.68,
+      "leg1_low_date": 202210, "leg1_low_price": 397.24,
+      "rebound_date": 202211, "rebound_price": 408.81,
+      "trough_date": 202212, "trough_price": 388.46,
+      "max_drawdown_pct": -0.098,
+      "leg1_benchmark_return_pct": -0.168,
+      "leg2_benchmark_return_pct": 0.091,
+      "premium_before_pct": 0.254,
+      "premium_after_pct": 0.213,
+      "recovery_days_valuation": 93
+    },
+    "R3": {
+      "peak_date": 202308, "peak_price": 414.36,
+      "trough_date": 202402, "trough_price": 370.86,
+      "max_drawdown_pct": -0.105,
+      "benchmark_return_pct": -0.204,
+      "premium_after_pct": 0.183,
+      "recovery_days_valuation": 64,
+      "recovery_days_point": 202
+    },
+    "R4": {
+      "peak_date": 202405, "peak_price": 404.05,
+      "trough_date": 202409, "trough_price": 363.31,
+      "max_drawdown_pct": -0.101,
+      "benchmark_return_pct": -0.141,
+      "premium_before_pct": 0.2628,
+      "premium_after_pct": 0.154,
+      "recovery_days_point": 31
+    }
+  },
+  "credit_events": ["LINGNAN_DEFAULT_20240814", "GUANGHUI_DELIST_20240828", "SOUTE_FIRSTDEFAULT_20240517"]
+}

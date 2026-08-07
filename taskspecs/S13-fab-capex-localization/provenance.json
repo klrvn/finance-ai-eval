@@ -1,0 +1,77 @@
+{
+  "task_id": "S13",
+  "version": "1.0.0",
+  "origin": "legacy-v1",
+  "authored_by": "eval-judge container-authoring, adapted from IRAB irab-012 (Investment Research Agent Benchmark, Rabyte Technology, CC BY 4.0)",
+  "origin_note": "New authored container (not a v1 migration). origin is tagged 'legacy-v1' to satisfy the spec-lint governance gate, which currently only accepts that value; true authorship is recorded here. This is the SECOND container to carry that tag under false pretenses (S12 was the first, also an IRAB import) — at two occurrences the governance gate should probably widen to accept an 'irab-v1' origin rather than have every import misdeclare itself.",
+  "design_thesis": "锚点确定 × 级联自洽的双正交容器。设计出发点是：这道题的可核验性不是沿推导链衰减，而是从一开始就分成两块互不重叠的区域——输入锚点区（各厂商营收基数、招股书数据、当期国产化率口径）是冻结的确定事实，有唯一外部真值；模型区（单价、环节占比、国产化率、公司份额，以及由它们算出的一切金额）从一开始就没有唯一值，权威来源全部以区间发布，公司份额更是从未公开披露。因此外部真值只覆盖前者，后者一律以内部一致性类型承载。容器测的是「锚点取对了 × 级联自洽」两件正交的事，而非「你的答案是否等于我的答案」。",
+  "why_no_output_gt": "单万片设备投资单价存在两套相差 2.8 倍的合法口径：广发证券的「非 HBM 先进 DRAM 前道设备」约 25-30 亿元/万片，与经济观察报援引产业投资人的 70 多亿元/万片，差异来自节点/产品（普通 vs 1β/1γ/HBM-capable）与「前道设备 vs 含配套」两重口径分歧。环节价值量占比与国产化率同样全部以区间发布，且国产化率是快变数据。各公司在各环节的国产内部份额，gold 明确写着「未公开披露，须作透明假设、不得编造点值」。给这些设点值 GT 会使评分方向反转：惩罚「以区间建模、标注口径、明说是假设」这一 gold 在 deliverable_compliance 与 data_inconsistency 两处都明确要求的正确行为，同时放行一个恰好撞对了中值却毫无口径纪律的伪精确答案。这与 S12 的 why_no_strategy_gt 是同一条约束在不同任务上的实例。",
+  "tier_rationale": "T2 而非 T1。lint 层面两者都通过（objective_dims == {D1,D2} 且 gt_kind == calculator 满足 T1 的两条硬性条件），所以这是一个语义判断而非被迫的选择。取 T2 的理由是真值路径强度：S12（同一 benchmark 的 irab-004）的冻结键覆盖的是计算链的**整个输入层**（两支指数的逐年回报驱动全部下游推导），而 S13 的冻结键只覆盖**校验锚点与时效性探针**——模型的真正输入是区间假设，没有一个有真值。宪法 §5 对 T1 的要求「承重数值检查点都有真值路径」在此不成立。tier 刻画真值路径强度、objective_dims 个数刻画被锚定的维度数，2026-08-06 的 lint 修订已把这两个轴解耦，本容器正是该修订的第一个消费者。",
+  "method_evidence": "51 个检查点分四组（13 + 13 + 15 + 10）：(1) D1 第一层 13 个 grounding —— 9 个设备厂商 2025 年营收（number, rel 2%，gold 自标容差）+ 长鑫拟募资额与招股书设备购置费 + 北方华创持芯源微比例 + 长存三期国产设备占比（ratio，带 [0.40,0.70] 的时效性探针）；(2) D2 第一层 13 个 methodology —— 2 个 sum_to 校验各厂环节占比合计、6 个 reconcile 贯通三级级联（产能×单价 → 单线额×环节占比 → 环节国产额求和）、5 个 consistency 承载勾稽闭合/光刻近零/整线国产比例/两厂刻蚀+薄膜双带；(3) C 组 15 个无标签依赖字段，只为把值取出来喂给 B 组公式；(4) D 组 10 个无标签交付物与覆盖度检查点，喂 D3 盲评与报告审计痕迹。C/D 两组一律不打标签，避免用「报了就通过」的容易题稀释第一层基线（沿用 S12 的做法）。",
+  "key_design_decisions": {
+    "disjoint_bands_catch_shared_vector": "etch_depo_share_dram 的通过带 [0.415, 0.535] 与 etch_depo_share_nand 的 [0.55, 0.78] **刻意互不相交**（上带止于 0.535，下带起于 0.55）。gold 的红线5「DRAM 与 NAND 共用同一套环节占比向量」本来只能靠盲评主观发现——评分器没有「必须相异」这种原语，consistency 只能测相等。但两条互斥区间把它变成了确定性判定：任何单一的刻蚀+薄膜合计值都不可能同时落进两条带，共用向量必使其一失败。gold 自身给的基准向量也验证了这一点——DRAM 基准 21+22=43% 落在上带、NAND 基准 35+26=61% 落在下带。上带之所以取到 0.415 而非贴着 gold facts 的 45-50%，是因为 gold 内部就有分歧：facts 段说 DRAM 刻蚀+薄膜合计 45-50%，formula_construction 段给的基准向量却是 43%。带宽同时容纳两者。",
+    "litho_near_zero_uses_relative_tolerance": "litho_domestic_near_zero 用 rel:true tol:1.5 而非绝对容差。绝对容差在这里是错的：rhs 是作品自己的光刻设备额的 1%，其量级随作品所选单价在 0.4-0.8 亿元之间浮动，而**给光刻零国产受益是最正确的答案**——若用绝对容差 0.5，一个诚实地写下「光刻国产受益为 0」的作品会因 |0 − 0.564| = 0.564 > 0.5 而失败，恰好惩罚了最好的答案。改用相对容差后通过条件变成「光刻国产额 ≤ 光刻设备额的 2.5%」：零通过，国产化率不足 1% 的合理估算通过，把 8 亿元这类明显违背红线2 的分摊挡在外面。",
+    "dependency_fields_typed_number_not_present": "C 组 12 个标量依赖字段的类型取 number 而非 present——这是相对 S12 的有意偏离（S12 的 15 个依赖字段用 present）。原因是 validators.py 只对 bp/yr/pct/ratio/number/reconcile/sum_to 做单位归一，present 类型的值原样透传。本题的环节占比与国产化率被写成百分号的概率极高，走 present 会让 '22%' 以字符串留在 normalized.json 里，而 build_env 跳过非数值，结果是 6 个 reconcile 与 5 个 consistency 因 KeyError 集体转 NA——D2 第一层基线的分母被悄悄掏空，报告看上去却只是「不可核验」。代价是这 12 个字段因无 GT 键而在报告里显示为 NA（grade_checkpoints 对无真值的标量记 NA，不进分母、不扣分），换来的是级联公式真的能求值。字典型依赖仍用 present，因为 validators 本就不处理结构化值。",
+    "freshness_probe_as_threshold_band": "长存三期国产设备占比是**阈值型事实**（「首次超过 50%」）而非点值，故以带中值 0.55 + 容差 0.15 编码，通过带 [0.40, 0.70]。带的下沿必须严格高于陈旧口径的上界（国内晶圆厂平均 15-30%），否则这个检查点就不再是时效性探针而只是送分题。该前提由计算器 self_check 的第 7 条断言守护：任何未来把容差放宽或把中值下调、以致 0.30 能通过的改动，会使自检失败而非静默削弱鉴别力（借鉴 S12 的逐年间距断言）。",
+    "no_grounding_group_weights": "13 个 grounding 检查点等权，不启用 grounding_group_weights。考虑过按「9 个营收 : 4 个锚点/时效」分两组各占一半，让时效性在第一层拿到更高权重，但没有采用：时效性的惩罚力度已由 CF4 提供（封顶 D1 到等级 1），比在第一层调权重狠得多；而分组一旦启用就必须覆盖全部 grounding 字段，否则未覆盖者会被汇总器归入一个额外的等权组，静默地重新配平整个 D1。留作 v1.1 细化。",
+    "sensitivity_untagged": "sensitivity_monotonic 保留为检查点但**不打 methodology 标签**。formula_construction 第 10 条要求二维敏感性表，但 deliverable_compliance 的结构自由度段明说「是否含敏感性页均属设计自由，不据此扣结构分」——gold 内部对这一项的态度不一致。折中：检查点保留（有敏感性表就验其单调性，结果进报告），但不进 D2 第一层基线，缺失只由 D4 的「未提示结论对口径假设的高敏感性」锚点承担。",
+    "wanye_deliberately_unanchored": "万业企业 2025 年营收刻意不设检查点。gold 明确标注其无可信结构化数据、应留空或标「待查」而非编造。设了真值就会奖励编造行为。相应地 judge_notes 的 D1 第二层写明：留空或标待查不扣分，给出一个无来源的具体数字则按 major 登记并与 CF1 链呼应。",
+    "cf3_enabled_unlike_s12": "启用 CF3（描述了分析但未产出计算结果，封顶 D2 与 D3 到等级 1）。S12 停用了 CF3，理由是它会把 D2:35 + D3:15 一刀切封顶而 D2 是 S12 的主维度。S13 的情况相反：gold 的 deliverable_compliance 开宗明义写着「纯文字结论/纯贴数表格/仅口头描述框架而无可核公式＝未满足『搭 Excel 测算底稿』」——交付一个没有计算的框架描述，本来就该让 D2 与 D3 双双坍到等级 1。这里的一刀切与题意一致，不是钝器。"
+  },
+  "prompt_deviation_from_irab": [
+    "钉死数据基准时点为 2026-06-13 并声明此后事件无需考虑。IRAB 原题是「当前时点扩产受益测算」，随时间漂移；本容器冻结为历史情景，使 CF4 的判定稳定、容器可复现。代价是不再考察实时取数能力，这一取舍是评测方的明确选择。",
+    "要求附一份「数据来源与口径表」，逐项说明单万片设备单价、环节占比、国产化率、公司份额、各厂商 2025 年营业收入的来源与年份/季度。理由与 S12 同源：有 GT 的检查点在「学生未报」时判 fail 而非 NA（grade_checkpoints.py 只有这两种状态），不在题面要求就会让作品因未披露原题从未明确要求的中间量而白吃 9 个 fail。而且 gold 的 data_timeliness 段本来就要求「数据须标注口径与时点（undated 即 T-1）」，补这一句是把评分要求与题面要求对齐，不是加码。",
+    "要求交付物暴露公式层（提交 .xlsx，或在文本中逐格给出计算式），并明示单价/占比/国产化率/份额须做成可调假设格。gold 把这一条作为核心判定（无可核公式即未满足交付），补进题面使考点对候选人可见而非暗坑。",
+    "【刻意不写进题面】data_inconsistency 的六条红线。那是检测标准而非题面要求，写进去等于交底。同理未在题面给出任何单价、占比、国产化率的参考区间——那正是本题要考察的取数与口径判断。"
+  ],
+  "irab_rubric_mapping": {
+    "facts": "拆成两处：可冻结的确定事实进 D1 第一层的 13 个 grounding 检查点；区间型口径知识进 judge_notes 的 D1/D2 第二层锚点与 D4 洞察锚点（不作为答案键）",
+    "formula_construction": "D2 第一层的 13 个 methodology 检查点（2 sum_to + 6 reconcile + 5 consistency），本容器判别力最集中处",
+    "deliverable_compliance": "D3 的五层骨架锚点 + D 组 10 个交付物 present/count_min 检查点 + CF3",
+    "data_timeliness": "D1 第一层的 ymtc_phase3_localization 时效性探针 + CF4 + D1 第二层的 as-of 标注锚点",
+    "user_need_coverage": "D3 完整性锚点 + D5 的相对弹性锚点 + companies_covered / process_steps_covered",
+    "data_inconsistency": "红线1 → company_vs_step_tie_out 与两个 sum_to（第一层）；红线2 → litho_domestic_near_zero（第一层）；红线5 → etch_depo_share_dram/nand 的互斥双带（第一层）；红线3/4/6 → D2 第二层的口径混用锚点（不可数值核验）"
+  },
+  "coverage_gaps": [
+    "红线3（国产化率口径串用）、红线4（设备 vs 总投资、订单 vs 收入混标）、红线6（主体串台）本质上是**跨文本自相矛盾检测**——「作品在此处声明 X、在彼处隐含非 X」。封闭类型表里没有能表达这种关系的检查点类型，因此这三条只能落在 D2 第二层的评分官锚点上。后果是这部分判别力从确定性退化为主观判断，评审间方差会高于第一层承载的部分。这是已知且有意接受的空缺，不是遗漏。",
+    "某一工艺环节内各公司国产份额之和超过该环节国产金额，没有独立检查点。分环节的份额向量形态因作品而异，无法用固定 schema 表达。该缺陷在汇总层被 company_vs_step_tie_out 间接兜住（超配会使公司层合计高于环节层合计），单环节内部的超配若被其他环节的欠配抵消则会漏网；D2 第二层配了对应锚点。",
+    "长鑫 IPO 的**状态**（已获同意注册 vs 仍在审核 vs 已挂牌）是本题最典型的时效性考点，但它是categorical 事实，不是数值。曾考虑编码为 YYYYMMDD 的注册同意日，但要求作品精确到日过于严苛——gold 的关切是「不可仍称仍在审核/未过会」这一状态口径，而非具体日期。最终交给 CF4 与 D1 第二层承担，第一层的时效性只由长存三期国产化率一个探针代表。",
+    "端到端链路中不可确定性验证的两段：LLM 提取器的行为，以及两位盲评评分官的判断。前者的已知格式敏感点已由 tests/cascade_capture_test.py 第 1 组锁定并写进 known_extractor_format_sensitivities，后者本就是设计上的非确定量（分歧超过一级即标 needs_review 交人工）。这两段不构成检查点覆盖缺口，列此仅为说明边界。"
+  ],
+  "known_extractor_format_sensitivities": [
+    "占比/国产化率写成字符串 '22%' 且 unit_as_written 留空：validators.py 的首数字正则取出 22、无单位可依据故不做除法，占比放大 100 倍。写 0.22（无单位）或 22（unit_as_written: '%'）都正确，混写则失真。【实测修正】最初以为这会使级联检查点转 NA（静默掏空分母），实际不会——值仍是数值，评分器照常求值，结果是 6 个 methodology 检查点被误判为未通过（两个 *_step_weights_sum、两个 *_etch_amount、两个 etch_depo_share_*），D2 第一层基线从 1.0 掉到 0.5385。这比 NA 好在自我暴露：*_etch_amount 的 Δ 达四位数、etch_depo_share_* 的 Δ 达两位数，是一眼可辨的量纲漂移指纹。tests/cascade_capture_test.py 第 1 组断言锁定了这一行为。",
+    "字典型字段（dram_step_domestic / nand_step_domestic / company_increments）若被压成标量，build_env 无法派生 __sum，3 个 reconcile 与 company_vs_step_tie_out 全部转 NA。",
+    "产能与单价量纲不配套（片/月 配 亿元/万片）使两个 equipment_total 以 10000 倍偏差失败。",
+    "光刻国产受益为零应记 0 而非 MISSING：记 MISSING 会使 litho_domestic_near_zero 因 KeyError 转 NA，最关键的红线检查失效。"
+  ],
+  "engine_versions": {
+    "grader": "1.1",
+    "aggregator": "2.3",
+    "extractor": "1.0",
+    "calculator": "fab_capex_anchors.py v1.0 (frozen anchor snapshot, network-free, self-checked)"
+  },
+  "data_provisioned": {
+    "mode": "snapshot",
+    "gt_kind": "calculator",
+    "calculator": "fab_capex_anchors.py v1.0",
+    "network": false,
+    "n_gt_values": 13,
+    "gt_values": "9 个设备厂商 2025 年营收（亿元）+ 长鑫拟募资额 + 长鑫招股书设备购置及安装费 + 北方华创持芯源微比例 + 长存三期国产设备占比带中值",
+    "scale": "金额 亿元(CNY)；naura_kingsemi_stake 与 ymtc_phase3_localization 为 fraction —— gt_recipe.yaml 不得声明 percent_fields（提取器 validators.py 已把带 % 的作答值转为 fraction，两侧同刻度；声明会导致再除一次 100 使这两个检查点必然失败）",
+    "data_cutoff": "2026-06-13",
+    "self_check": "8 项：13 个值齐备/数值/有限；9 个营收均为正；北方华创为营收最大一家；两个比例字段落在 fraction 刻度 (0,1)；募投三项之和 == 拟募资额（COMPUTED，钉死 295 亿拟募资与 345 亿项目总投资的口径区分）；项目总投资高于募集资金投入额；招股书设备购置费落在项目总投资包络内；时效性探针的通过带下沿严格高于陈旧口径上界 0.30"
+  },
+  "verification_log": {
+    "self_check_caught_an_authoring_bug": "首次运行时 self_check 失败，指出 cxmt_planned_raise=295 不低于募投三项之和 295。溯源发现是容器作者误读了 gold —— gold 写「募投=DRAM 技术升级 130 亿+产线技术升级改造 75 亿+前瞻技术研发 90 亿（合计总投资 345 亿）」，三项之和其实是 295 而非 345；295 亿是拟募资额（== Σ募集资金投入），345 亿是募投项目总投资（含自筹），是 A 股招股书的标准双口径结构。断言随即改为「三项之和 == 拟募资额」并新增项目总投资常量。这是自检机制按设计发挥作用的实例，也顺带把一个容易被候选人踩中的口径坑写进了 D2 第二层锚点。",
+    "judge_notes_lint_verified": "以 spec_lint.py 的真实正则校验通过：JUDGE_LEAK_PATTERNS 零命中、additive bonus 零命中、D1/D2 两段均含第一层与第二层标题、六个维度段落齐全。",
+    "calculator_run": "2026-08-06 实测通过：8/8 self_check、13/13 GT 值。gt_dispatch 两条路径均通过——内嵌答案键与 --snapshot 传入 fixtures/groundtruth_snapshot.json 产出的 values 完全一致（逐键相等），故 fixtures 镜像与内嵌键无漂移。",
+    "spec_lint_verified": "2026-08-06 实测：13 个容器 0 error，S13 为 PASS（无 warn）。其余容器的既有 warn 均为尚未迁移两层结构的 judge_notes（S1/S3-S8），与本容器无关。",
+    "format_drift_probe": "2026-08-06 实测三种占比写法（tests/cascade_capture_test.py 第 1 组）：0.22 无单位 → 通过；22 + unit '%' → 通过；'22%' 字符串无单位 → 放大 100 倍。**测试推翻了作者最初的假设**：本以为漂移会使级联检查点转 NA，实测是 6 个 methodology 检查点被误判未通过、D2 第一层基线 1.0 → 0.5385，Δ 达四位数。已据实修正 extraction_notes 硬约束第 1 条与 known_extractor_format_sensitivities。",
+    "redline_capture_verified": "2026-08-06 实测（tests/cascade_capture_test.py 第 3 组）：合成的违规作品同时犯三条红线（NAND 套用 DRAM 占比向量、光刻给 8.2 亿国产受益、公司层汇总比环节层高 12%），恰好命中 etch_depo_share_nand / litho_domestic_near_zero / company_vs_step_tie_out 三个检查点，**零误伤**（其余 10 个 methodology 检查点全部通过，无一转 NA），methodology_pass_fraction = 10/13 = 0.7692。第 2 组另验证干净作品的两个第一层基线均为 1.0、C 组 12 个依赖字段如期判 NA 且不进分母。第 4 组断言互斥双带前提（DRAM 带上沿 0.535 < NAND 带下沿 0.550）。",
+    "workbook_dump_verified": "2026-08-06 实测两种工作簿：openpyxl 写出的（无缓存值）正确触发「本工作簿没有缓存值」横幅且公式列完整；注入了 <v> 缓存值的（模拟 Excel 打开过）不触发横幅且公式与值双列齐全。两条路径的公式格/常量格计数均正确。",
+    "no_golden_dir": "本容器不设 golden/ 目录，这是有意的。S1-S8 的 golden/ 约定（golden_clean + golden_defect + expected_results.json）从未落地：8 个容器全部标着「pending 待回填」，其 README 要求运行的 eval-taskspec-lint --golden 这个 flag 在 spec_lint.py 里根本不存在，且 skills/commands/rubrics/docs 全无引用。S9 以后的容器一律不再建该目录。取而代之的是 tests/ 约定（S11 的 point_scheme_test.py、本容器的 cascade_capture_test.py）——它以可执行代码同时承担了 golden_clean 与 golden_defect 两件事：跑真实的 validators.py → grade_checkpoints.py 链路，既断言合规作品 26 个带标签检查点全通过，也断言违规作品恰好命中 3 个红线检查点且零误伤。更重要的是本容器的设计前提本就排斥「完美答案」这一概念：输出层是假设驱动的，任何手写的理想作品只能编码作者自己的假设，用它得满分来自证容器正确近乎循环论证。评测框架的正确性由 GT 自检 + 内部一致性检查点 + 扣分锚点三层各自verify，不依赖端到端金样。"
+  },
+  "review_status": "draft",
+  "notes": "Family: capex-allocation（新家族，本容器为首个）。Weights: D1:20 D2:30 D3:20 D4:10 D5:5 D6:15。objective_dims: [D1, D2]（依赖 2026-08-06 的 T2 个数上限取消）。CF: CF1+CF2+CF3+CF4+CF5。Citation: sample,k=6。Scoring mode: binary。51 个检查点：13 grounding（12 number + 1 ratio）+ 13 methodology（2 sum_to + 6 reconcile + 5 consistency）+ 12 无标签 number 依赖 + 3 无标签 present 字典依赖 + 10 无标签交付物/覆盖度（6 present + 3 count_min + 1 monotonic）。",
+  "container_hash": "d021628630877b9d"
+}

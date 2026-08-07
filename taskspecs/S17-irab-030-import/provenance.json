@@ -1,0 +1,86 @@
+{
+  "task_id": "S17",
+  "version": "1.0.0",
+  "origin": "legacy-v1",
+  "authored_by": "human-reviewed, adapted from IRAB irab-030 (Investment Research Agent Benchmark, Rabyte Technology, CC BY 4.0); initial scaffold drafted by eval-irab-import (now removed from this repo)",
+  "origin_note": "First drafted by the (since-removed) eval-irab-import skill as a per-fact generic scaffold (with every field mistakenly typed pct because each fact's sentence ends in a relative-tolerance annotation like '误差 相对±1%'), then fully rewritten by hand: correct number-typed fields, a working calculator with real GT values, and a judge_notes.md with the answer-leaking sentence from gold's own data_distortion text removed (see key_design_decisions.answer_leak_removed).",
+  "design_thesis": "全部27个真值键均为真外部真值(马来西亚统计局DOSM官方贸易统计)，本容器不存在'无点值真值'的量。本题真正的难点不是取数，而是题面'贸易差额最大'本身有歧义(顺差最大 vs 绝对值最大)——容器故意不对'哪个国家是答案'设检查点，只核验候选作品的逐国数据准确性、内部算术自洽性(差额=出口-进口)、以及是否声明了自己采用的'最大'定义，结论正确性交给判官在候选作品自己声明的定义下核对。",
+  "classification_snapshot": {
+    "shape": "pure-lookup",
+    "containerize": true,
+    "tier": "T2",
+    "objective_dims": [
+      "D1"
+    ],
+    "weight_hints": {
+      "D1": 45,
+      "D2": 15,
+      "D3": 15,
+      "D4": 0,
+      "D5": 0,
+      "D6": 25
+    },
+    "citation_policy_hint": {
+      "mode": "none"
+    },
+    "cf_hints": [
+      "CF1",
+      "CF5"
+    ],
+    "rationale": [
+      "answer_correctness 存在，或 facts 条数少且几乎每条都带容差标注、且没有 reasoning_angle_coverage/user_need_coverage——是单一可核验答案的查数题",
+      "objective_dims=['D1'] -> tier=T2（T1 硬性要求 objective_dims 恰为 [D1,D2]；没有 data_inconsistency可挂 D2 methodology 检查点时，宁可落到 T2，也不要为了凑 T1 硬造一个假的 D2 锚点）"
+    ],
+    "unmapped_fields": [],
+    "signals": {
+      "has_closure_identity": false,
+      "has_answer_correctness": true,
+      "has_skill_executability": false,
+      "has_formula_construction": false,
+      "has_calculation_correctness": false,
+      "has_reasoning_angle": false,
+      "has_user_need_coverage": false,
+      "has_data_completeness": false,
+      "has_data_inconsistency": false,
+      "has_source_authority": true,
+      "has_data_timeliness": false,
+      "has_non_consensus_view": false,
+      "has_chart_fidelity": false,
+      "facts_count": 9,
+      "tolerance_annotation_hits": 18,
+      "timeliness_signal_hits": 0
+    },
+    "task_id": "irab-030",
+    "irab_audit_rating": {
+      "line": "| **irab-030** | 马来西亚贸易差额查询 | **A** | 单一封闭答案。最简单的 data-retrieval 任务——一个 number 检查点即可。适合作为\"快速及格\"级验证任务 |",
+      "rating": "A"
+    }
+  },
+  "method_evidence": "36个检查点: 27个 grounding(number, 8国×出口/进口/差额 + 全国合计×出口/进口/差额) + 9个 methodology consistency(balance_*_consistency, 差额算术闭环) + 1个 methodology present(balance_definition_declared) + 2个无标签 present/count_min(answer_declared, all_eight_partners_present)。",
+  "key_design_decisions": {
+    "answer_leak_removed": "eval-irab-import 自动起草的 judge_notes.md 直接从 gold facts 的 data_distortion 原文转录了一句'口径【误读】导致答案错主体...本题正解为最大顺差/最大绝对差额=美国'——这把本题唯一的核心结论直接写进了盲评判官的载荷（judge_notes.md 是盲评判官白名单字段之一），构成实质的盲评隔离违规。人工审阅时发现并删除，改写为不预设结论的判定标准（候选作品的方向/量级是否与自己给出的数据自洽，而非是否等于某个预设答案）。这是本次人工审阅阶段发现的最重要的一处缺陷，记录于此提醒: 自动起草流程直接转录 gold 原文到 judge_notes 时，必须逐句检查是否夹带了单一确定性结论的答案，而不能只依赖 spec_lint 的关键词正则(该正则未覆盖'正解'这一措辞)。",
+    "no_answer_checkpoint": "'贸易差额最大的是哪个国家'本身不设检查点——该问题的正确答案依赖候选作品自己声明的定义(顺差最大/绝对值最大)，属于口径判断而非可脱离声明独立核验的数值真值，故只核验数据准确性+算术自洽性+是否声明定义，结论本身交给判官在候选作品自己的声明下核对。",
+    "tier_upgrade_to_T1": "初版 scaffold 因没有 methodology 检查点被判 T2；人工补充 balance_*_consistency 与 balance_definition_declared 后 D2 有了真实的 methodology 检查点，objective_dims 可以恰为[D1,D2]，满足 T1 的硬性条件，遂升级为 T1。"
+  },
+  "prompt_deviation_from_irab": [
+    "把原题'今年截至2月底'的相对时间表述，改写为绝对的'2026年1月至2月'，并要求候选作品注明统计口径(出口FOB/进口CIF)与数据来源/发布时点——原题面的相对时间表述会随着容器被使用的时间推移而失去意义，必须钉死为绝对区间才能配一份冻结的真值快照。",
+    "补充了'贸易差额最大'的定义声明要求(顺差最大 vs 绝对值最大)——原题面存在这一未点破的歧义，若不要求候选作品声明，检查点会在候选作品选择了另一种合理理解时被误判。"
+  ],
+  "irab_rubric_mapping": {
+    "facts": "27个grounding检查点(D1第一层)",
+    "source_authority": "D1第二层来源分级锚点",
+    "data_distortion": "D1第二层(方向/量级/编造)锚点，其中直接点名答案国家的一句已删除改写(见key_design_decisions.answer_leak_removed)"
+  },
+  "coverage_gaps": {
+    "none": "本容器全部27个真值键均为真外部真值，不存在'有意不设点值真值'的量。"
+  },
+  "verification_log": {
+    "calculator_run": "2026-08-07 实测通过: 19/19 self_check, 27个GT值。8国+全国合计的差额计算值与gold参考值一致(±1 RM百万)，方向(顺差/逆差)与已知方向一致，8国之和与全国合计有明显差距(符合预期，全国合计覆盖8国之外的其他贸易伙伴)。",
+    "spec_lint": "2026-08-07 实测: 0 error。",
+    "judge_notes_leak_audit": "2026-08-07 人工审阅发现并修复答案泄漏(见 key_design_decisions.answer_leak_removed)，修复后人工复核确认判官载荷不再包含'哪个国家是答案'这一结论。",
+    "gold_answer_key_dry_run": "pending —— 完整LLM抽取+盲评判官端到端跑通尚未做。"
+  },
+  "review_status": "draft",
+  "container_hash": "914c0c4de23f734e",
+  "notes": "Family: data-retrieval。Weights: D1:45 D2:15 D3:15 D4:0 D5:0 D6:25。CF: CF1+CF5。Citation: none。36个检查点，其中27 grounding + 9 methodology consistency + 1 methodology present + 2 无标签。冻结前仍需完整LLM抽取+盲评判官端到端dry run。"
+}

@@ -1,0 +1,122 @@
+# =============================================================================
+# S16 检查点模式 —— 招商银行(600036.SH) 2025年报杜邦分解，由 irab-021 gold facts 人工重写
+# =============================================================================
+# 这是对 eval-irab-import 自动起草版本的替换：自动版本把每条 gold fact 整句机械映射成
+# 一个 fact_NN_value 字段（类型经常猜错，比如把"总资产+7.56%"这类含%的陪衬数字误判成
+# pct 类型主字段），不能反映任何单一真实量。本版本改为逐个原子量手工建模。
+#
+# 标签含义:
+#   grounding: true    -> 计入 D1 第一层 grounding_pass_fraction
+#   methodology: true  -> 计入 D2 第一层 methodology_pass_fraction
+#   两者皆无            -> 只计入整体 pass_fraction，不锚定任何维度分数
+
+fields:
+
+  # ===========================================================================
+  # A 组：原始财务数据（外部真值，来自招商银行 A 股定期报告）
+  # ===========================================================================
+  revenue_2025:            {type: number, tol: 0.005, rel: true, grounding: true, description: "2025年度营业收入(合并利润表口径,亿元)"}
+  net_profit_2025:         {type: number, tol: 0.005, rel: true, grounding: true, description: "2025年度归属于本行股东的净利润(亿元)"}
+  total_assets_2025_eop:   {type: number, tol: 0.005, rel: true, grounding: true, description: "2025年末总资产(亿元)"}
+  equity_2025_eop:         {type: number, tol: 0.005, rel: true, grounding: true, description: "2025年末归属于本行股东权益(亿元)"}
+
+  revenue_2024:            {type: number, tol: 0.005, rel: true, grounding: true, description: "2024年度营业收入(与2025年报对比列同口径,亿元)"}
+  net_profit_2024:         {type: number, tol: 0.005, rel: true, grounding: true, description: "2024年度归属于本行股东的净利润(亿元)"}
+  total_assets_2024_eop:   {type: number, tol: 0.005, rel: true, grounding: true, description: "2024年末总资产(亿元)"}
+  equity_2024_eop:         {type: number, tol: 0.005, rel: true, grounding: true, description: "2024年末归属于本行股东权益(亿元)"}
+
+  total_assets_2023_eop:   {type: number, tol: 0.005, rel: true, grounding: true, description: "2023年末总资产(亿元) —— 平均口径2024年因子的分母基数"}
+  equity_2023_eop:         {type: number, tol: 0.005, rel: true, grounding: true, description: "2023年末归属于本行股东权益(亿元)"}
+
+  disclosed_roae_2025:     {type: pct, tol: 0.0005, grounding: true, description: "年报披露2025年加权平均净资产收益率(ROAE,归属普通股股东口径)"}
+  disclosed_roae_2024:     {type: pct, tol: 0.0005, grounding: true, description: "年报披露2024年加权平均净资产收益率(ROAE)"}
+  disclosed_roaa_2025:     {type: pct, tol: 0.0005, grounding: true, description: "年报披露2025年平均总资产收益率(ROAA)"}
+  disclosed_roaa_2024:     {type: pct, tol: 0.0005, grounding: true, description: "年报披露2024年平均总资产收益率(ROAA)"}
+
+  # ===========================================================================
+  # B 组：口径路由字段（present，不打标签——路由本身不是评分项）
+  # ===========================================================================
+  caliber_declared:
+    type: present
+    # 提取值: "eop"(期末口径) | "avg"(平均口径)。候选作品必须声明用的是哪一种，
+    # 且2025/2024两年须用同一种口径；未声明则由评分器按数值推断(全组一次性)。
+
+  # ===========================================================================
+  # C 组：杜邦三因子 + 乘积（外部真值，按口径路由；净利率不分口径故不设 gt_variants）
+  # ===========================================================================
+  net_margin_2025:  {type: pct, tol: 0.001, grounding: true, description: "净利率=归母净利润/营业收入，2025年，两种口径下数值相同"}
+  net_margin_2024:  {type: pct, tol: 0.001, grounding: true, description: "净利率，2024年"}
+
+  turnover_2025:
+    type: pct
+    tol: 0.0003
+    grounding: true
+    gt_variants: {field: caliber_declared, map: {eop: turnover_2025_eop, avg: turnover_2025_avg}}
+    description: "总资产周转率=营业收入/总资产，2025年，按候选作品声明的口径路由"
+
+  turnover_2024:
+    type: pct
+    tol: 0.0003
+    grounding: true
+    gt_variants: {field: caliber_declared, map: {eop: turnover_2024_eop, avg: turnover_2024_avg}}
+    description: "总资产周转率，2024年"
+
+  leverage_2025:
+    type: ratio
+    tol: 0.05
+    grounding: true
+    gt_variants: {field: caliber_declared, map: {eop: leverage_2025_eop, avg: leverage_2025_avg}}
+    description: "权益乘数=总资产/归母权益，2025年"
+
+  leverage_2024:
+    type: ratio
+    tol: 0.05
+    grounding: true
+    gt_variants: {field: caliber_declared, map: {eop: leverage_2024_eop, avg: leverage_2024_avg}}
+    description: "权益乘数，2024年"
+
+  roe_product_2025:
+    type: pct
+    tol: 0.001
+    grounding: true
+    gt_variants: {field: caliber_declared, map: {eop: product_2025_eop, avg: product_2025_avg}}
+    description: "三因子乘积(=净利率×周转率×权益乘数=归母净利润/归母权益)，2025年——注意此数与年报披露ROAE是两套口径，不应相等"
+
+  roe_product_2024:
+    type: pct
+    tol: 0.001
+    grounding: true
+    gt_variants: {field: caliber_declared, map: {eop: product_2024_eop, avg: product_2024_avg}}
+    description: "三因子乘积，2024年"
+
+  # ===========================================================================
+  # D 组：D2 方法正确性 —— 内部一致性(不读取外部真值，只核验候选作品自己的数字能否互算)
+  # ===========================================================================
+  roe_closure_2025:
+    type: consistency
+    lhs: "roe_product_2025"
+    rhs: "net_margin_2025 * turnover_2025 * leverage_2025"
+    tol: 0.02
+    rel: true
+    methodology: true
+    description: "红线: 候选作品自己报的三因子乘积，必须等于自己报的净利率×周转率×权益乘数(2025年)"
+
+  roe_closure_2024:
+    type: consistency
+    lhs: "roe_product_2024"
+    rhs: "net_margin_2024 * turnover_2024 * leverage_2024"
+    tol: 0.02
+    rel: true
+    methodology: true
+    description: "红线: 同上，2024年"
+
+  driver_attribution:
+    type: present
+    methodology: true
+    description: "候选作品是否给出明确的量化归因(连环替代法或对数分解等)，指出ROE变动主要由哪个因子驱动"
+
+  # ===========================================================================
+  # E 组：交付物覆盖度（无标签，喂 D3）
+  # ===========================================================================
+  both_years_factors_present:   {type: present, description: "2025年与2024年的三因子是否都给出"}
+  caliber_stated_once:          {type: present, description: "全文是否至少一处声明所用口径(期末/平均)"}

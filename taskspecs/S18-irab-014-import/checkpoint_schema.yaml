@@ -1,0 +1,152 @@
+# =============================================================================
+# S18 检查点模式 —— 五粮液(000858.SZ) 多空综合分析，由 irab-014 gold facts 人工重写
+# =============================================================================
+# 替换 eval-irab-import 自动起草版本：自动版本把每条 gold fact 整句机械映射成一个
+# fact_NN_value 字段（一条 fact 常常捆绑多个不同量级的数字，机械映射既取不出正确的值
+# 也测不出真正的问题）。本版本改为逐个原子量手工建模，并明确保留 gold facts 里"确实
+# 没有单一数值"的量（批价口径、渠道库存、分红率区间等）为 present 类型，不编造点值真值。
+#
+# 标签含义:
+#   grounding: true    -> 计入 D1 第一层 grounding_pass_fraction
+#   methodology: true  -> 计入 D2 第一层 methodology_pass_fraction
+#   两者皆无            -> 只计入整体 pass_fraction，不锚定任何维度分数
+
+fields:
+
+  # ===========================================================================
+  # A 组：2025年会计差错更正 —— 前三季度重述前/重述后(外部真值, 本题最核心的口径陷阱)
+  # ===========================================================================
+  revenue_2025_9m_pre:   {type: number, tol: 0.01, rel: true, grounding: true, description: "2025前三季度营业收入, 重述前(原披露)口径, 亿元"}
+  net_profit_2025_9m_pre: {type: number, tol: 0.01, rel: true, grounding: true, description: "2025前三季度归母净利润, 重述前口径, 亿元"}
+  revenue_2025_9m_post:   {type: number, tol: 0.01, rel: true, grounding: true, description: "2025前三季度营业收入, 重述后口径, 亿元"}
+  net_profit_2025_9m_post: {type: number, tol: 0.01, rel: true, grounding: true, description: "2025前三季度归母净利润, 重述后口径, 亿元"}
+
+  # ===========================================================================
+  # B 组：2025年报全年(重述后官方口径)
+  # ===========================================================================
+  revenue_2025_full:       {type: number, tol: 0.01,  rel: true, grounding: true, description: "2025年度营业总收入, 重述后口径, 亿元"}
+  net_profit_2025_full:    {type: number, tol: 0.01,  rel: true, grounding: true, description: "2025年度归母净利润, 重述后口径, 亿元"}
+  gross_margin_2025:       {type: pct,    tol: 0.003, grounding: true, description: "2025年度毛利率"}
+  gross_margin_2024:       {type: pct,    tol: 0.003, grounding: true, description: "2024年度毛利率(与2025年报对比列同口径披露)"}
+  operating_cashflow_2025: {type: number, tol: 0.02,  rel: true, grounding: true, description: "2025年度经营活动现金流净额, 亿元"}
+
+  # ===========================================================================
+  # C 组：历史对照(未被本次重述调整, 旧确认口径, 外部真值)
+  # ===========================================================================
+  revenue_2024_full:    {type: number, tol: 0.01, rel: true, grounding: true, description: "FY2024营业收入, 旧确认口径(发货确认), 亿元"}
+  net_profit_2024_full: {type: number, tol: 0.01, rel: true, grounding: true, description: "FY2024归母净利润, 旧确认口径, 亿元"}
+  revenue_2023_full:     {type: number, tol: 0.01, rel: true, grounding: true, description: "FY2023营业收入, 旧确认口径, 亿元"}
+
+  # ===========================================================================
+  # D 组：2025分季度(重述后口径, 外部真值, 用于D2的季度闭合检查)
+  # ===========================================================================
+  q1_2025_revenue: {type: number, tol: 0.01, rel: true, grounding: true, description: "2025Q1营业收入, 重述后口径, 亿元"}
+  q2_2025_revenue: {type: number, tol: 0.01, rel: true, grounding: true, description: "2025Q2营业收入, 重述后口径, 亿元"}
+  q3_2025_revenue: {type: number, tol: 0.01, rel: true, grounding: true, description: "2025Q3营业收入, 重述后口径, 亿元"}
+  q4_2025_revenue: {type: number, tol: 0.01, rel: true, grounding: true, description: "2025Q4营业收入, 重述后口径, 亿元(=全年405.29-前三季306.38)"}
+  q1_2025_np: {type: number, tol: 0.015, rel: true, grounding: true, description: "2025Q1归母净利润, 重述后口径, 亿元"}
+  q2_2025_np: {type: number, tol: 0.015, rel: true, grounding: true, description: "2025Q2归母净利润, 重述后口径, 亿元"}
+  q3_2025_np: {type: number, tol: 0.015, rel: true, grounding: true, description: "2025Q3归母净利润, 重述后口径, 亿元"}
+  q4_2025_np: {type: number, tol: 0.015, rel: true, grounding: true, description: "2025Q4归母净利润, 重述后口径, 亿元"}
+
+  # ===========================================================================
+  # E 组：2026Q1(重述后口径, 外部真值)
+  # ===========================================================================
+  revenue_2026q1:      {type: number, tol: 0.015, rel: true, grounding: true, description: "2026Q1营业收入, 重述后口径, 亿元, 同比+33.67%"}
+  net_profit_2026q1:   {type: number, tol: 0.015, rel: true, grounding: true, description: "2026Q1归母净利润, 重述后口径, 亿元, 同比+82.57%"}
+  gross_margin_2026q1: {type: pct,    tol: 0.003,  grounding: true, description: "2026Q1毛利率"}
+  operating_cashflow_2026q1: {type: number, tol: 0.02, rel: true, grounding: true, description: "2026Q1经营活动现金流净额, 亿元(为负)"}
+
+  # ===========================================================================
+  # F 组：合同负债/预收款(外部真值, 资产负债表时点余额)
+  # ===========================================================================
+  contract_liability_2024_end:  {type: number, tol: 0.02, rel: true, grounding: true, description: "2024年末合同负债余额, 亿元"}
+  contract_liability_2025_end:  {type: number, tol: 0.02, rel: true, grounding: true, description: "2025年末合同负债余额, 亿元, 同比+15.14%"}
+  contract_liability_2026q1_end: {type: number, tol: 0.02, rel: true, grounding: true, description: "2026Q1末合同负债余额, 亿元"}
+
+  # ===========================================================================
+  # G 组：股东回报(仅取有单一点值来源的两项; 股息率/回购/增持/账上现金均为区间, 见 K 组)
+  # ===========================================================================
+  dividend_total_fy2025:        {type: number, tol: 0.03, rel: true, grounding: true, description: "FY2025现金分红合计(中期+年度), 亿元"}
+  dividend_payout_ratio_fy2025: {type: pct,    tol: 0.05, rel: true, grounding: true, description: "FY2025归母分红率(重述后低基净利口径, 数值偏高)"}
+
+  # ===========================================================================
+  # H 组：估值(截至约2026-06-12, 外部真值)
+  # ===========================================================================
+  market_cap: {type: number, tol: 0.05, rel: true, grounding: true, description: "总市值, 亿元"}
+  pb:         {type: ratio,  tol: 0.1,  grounding: true, description: "PB(市净率)"}
+  pe_ttm:     {type: ratio,  tol: 0.08, rel: true, grounding: true, description: "PE(TTM), 分母为重述后偏低净利, 属失真高读数, 需候选作品说明"}
+  stock_price: {type: number, tol: 0.05, rel: true, grounding: true, description: "股价, 元"}
+
+  # ===========================================================================
+  # I 组：可比公司与行业(外部真值, 用于多空分析的横向对照)
+  # ===========================================================================
+  moutai_revenue_total_2025: {type: number, tol: 0.02, rel: true, grounding: true, description: "贵州茅台FY2025营业总收入, 亿元"}
+  moutai_net_profit_2025:    {type: number, tol: 0.02, rel: true, grounding: true, description: "贵州茅台FY2025归母净利润, 亿元"}
+  moutai_gross_margin_2025:  {type: pct,    tol: 0.005, grounding: true, description: "贵州茅台FY2025毛利率"}
+  moutai_pe_ttm:              {type: ratio,  tol: 0.08, rel: true, grounding: true, description: "贵州茅台PE(TTM)"}
+  moutai_pb:                   {type: ratio,  tol: 0.08, rel: true, grounding: true, description: "贵州茅台PB"}
+  moutai_dividend_yield:       {type: pct,    tol: 0.005, grounding: true, description: "贵州茅台股息率"}
+  moutai_payout_ratio:         {type: pct,    tol: 0.02, grounding: true, description: "贵州茅台分红率"}
+  luzhou_pe_ttm:                {type: ratio,  tol: 0.08, rel: true, grounding: true, description: "泸州老窖PE(TTM)"}
+  luzhou_dividend_yield:        {type: pct,    tol: 0.005, grounding: true, description: "泸州老窖股息率"}
+  baijiu_industry_revenue_yoy_2025:    {type: pct, tol: 0.01, grounding: true, description: "2025年A股20家白酒上市公司合计营业收入同比"}
+  baijiu_industry_netprofit_yoy_2025:  {type: pct, tol: 0.01, grounding: true, description: "2025年A股20家白酒上市公司合计归母净利润同比"}
+
+  # ===========================================================================
+  # J 组：D2 方法正确性 —— 内部一致性(候选作品自己的季度数字能否加总到年度数字)
+  # ===========================================================================
+  q_revenue_sum_consistency:
+    type: consistency
+    lhs: "revenue_2025_full"
+    rhs: "q1_2025_revenue + q2_2025_revenue + q3_2025_revenue + q4_2025_revenue"
+    tol: 0.01
+    rel: true
+    methodology: true
+    description: "红线: 候选作品自己报的四个季度营业收入之和, 必须等于自己报的全年营业收入(重述后口径); 防止用重述前前三季减重述后全年这种跨口径混算得出的Q4"
+
+  q_np_sum_consistency:
+    type: consistency
+    lhs: "net_profit_2025_full"
+    rhs: "q1_2025_np + q2_2025_np + q3_2025_np + q4_2025_np"
+    tol: 0.02
+    rel: true
+    methodology: true
+    description: "红线: 同上, 归母净利润"
+
+  restated_caliber_declared:
+    type: present
+    methodology: true
+    description: "候选作品是否明确声明所引用的财务数字使用的是重述前还是重述后口径, 且同比对比双方口径一致"
+
+  valuation_metric_choice_declared:
+    type: present
+    methodology: true
+    description: "候选作品是否说明了选用的估值指标(PE/PB/股息率/前瞻PE等)及选择理由, 而非直接把PE(TTM)当作估值贵不贵的唯一依据"
+
+  # ===========================================================================
+  # K 组：确实没有单一数值真值的量(present, 不编造点值真值)
+  # ===========================================================================
+  batch_price_caliber_declared:
+    type: present
+    description: "候选作品是否说明所引批价数据用的是挂牌报价口径还是渠道实际成交口径(两者均为区间, 无单一真值)"
+
+  channel_inventory_present:
+    type: present
+    description: "候选作品是否提及渠道库存水平(区间值, 无单一真值)"
+
+  dividend_yield_range_present:
+    type: present
+    description: "候选作品是否提及股息率水平(区间值, 无单一真值)"
+
+  buyback_and_cash_present:
+    type: present
+    description: "候选作品是否提及回购计划/集团增持计划/账上货币资金水平(均为区间值, 无单一真值)"
+
+  # ===========================================================================
+  # L 组：交付物覆盖度(无标签, 喂 D3)
+  # ===========================================================================
+  bull_case_present:        {type: present, description: "是否给出看多(bull)逻辑与支撑证据"}
+  bear_case_present:        {type: present, description: "是否给出看空(bear)逻辑与支撑证据"}
+  tilted_conclusion_present: {type: present, description: "是否给出有明确倾向性的综合判断(而非骑墙式'多空皆有可能')"}
+  key_metrics_table_present: {type: present, description: "是否汇总了营收/利润/毛利率/合同负债/动销库存/批价等关键指标"}

@@ -7,6 +7,12 @@
      来自中债估值中心/媒体披露（2021、2024 为披露值）与公开基准推算（其余四年）。
      财富口径由任务 prompt 钉死，无合法替代口径。
 
+  1b) 沪深300 逐年回报，**两种口径各 6 个值**（csi300tr_* 全收益 / csi300pr_* 价格指数）
+     —— 同样是真外部真值。与债底仓不同，这里两种口径都是合法选择，所以两条序列都输出；
+     容器的 csi300_<y> 检查点通过 gt_variants 按作品自己的口径选中其一比对，
+     另一条不参与该作品评分。两条序列逐年最小间距 1.68pp 远大于容差 0.005，
+     故不存在「一个数同时通过两种口径」的歧义（由 self_check 断言守护）。
+
   2) benchmark_annual_return —— 对照组年化收益率。**计算**得出而非硬编码：
      年度组合回报 = 0.95×债 + 0.05×沪深300全收益，逐年连乘后开六次方根。
      计算而非硬编码有两个好处：self_check 真正在验证算术，且任何分量修改自动传播。
@@ -52,9 +58,16 @@ BOND_WEALTH_YEARLY = {
     "2025": 0.0170,
 }
 
-# 沪深300 全收益指数 H00300.CSI 逐年回报（含分红再投资，贴近 ETF 实际持有口径）。
-# 仅用于推导对照组年化，**不**单独作为检查点 —— 因为价格指数口径(000300.SH)也是
-# 合法选择，两种口径的逐年差异达 0.9-1.7pp，任何能同时容纳两者的容差都失去鉴别力。
+# 沪深300 逐年回报 —— 两种合法口径**各自**都是外部真值。
+# 容器的 csi300_2020..2025 检查点通过 gt_variants 路由：按作品声明（或数值推断）的口径
+# 选中其中一条序列比对，另一条不参与该作品的评分。因此不再需要「一个容差同时容纳两者」，
+# 也就不必像 v1.0 那样放弃沪深300 逐年检查点。
+#
+# 两条序列逐年最小间距 1.68pp（2021），远大于检查点容差 0.005（0.5pp），
+# 故同一个数不可能同时通过两种口径 —— 这是 gt_variants 数值推断可靠的前提，
+# 由下方 self_check 的 series_disjoint 断言守护。
+
+# 全收益 H00300.CSI（含分红再投资，贴近 ETF 实际持有口径）。同时用于推导对照组年化。
 CSI300_TOTAL_RETURN_YEARLY = {
     "2020": 0.2989,
     "2021": -0.0352,
@@ -64,9 +77,9 @@ CSI300_TOTAL_RETURN_YEARLY = {
     "2025": 0.2098,
 }
 
-# 参考：同期沪深300 价格指数 000300.SH 逐年回报（不参与计算，仅记入 provenance
-# 供审计——容器的对照组年化容差 0.0015 需同时覆盖由它推出的结果）
-CSI300_PRICE_YEARLY_REFERENCE = {
+# 价格指数 000300.SH（不含分红再投资）。合法但非最优的 ETF 腿口径选择 ——
+# 口径优劣由 D1 第二层锚点承载，数值准确性由本序列在第一层度量。
+CSI300_PRICE_YEARLY = {
     "2020": 0.2721,
     "2021": -0.0520,
     "2022": -0.2163,
@@ -74,6 +87,9 @@ CSI300_PRICE_YEARLY_REFERENCE = {
     "2024": 0.1468,
     "2025": 0.1766,
 }
+
+# gt_variants 数值推断赖以区分两条序列的最小逐年间距（self_check 用）
+CSI300_MIN_SERIES_GAP = 0.01
 
 # 已知市场方向（self_check 用）：沪深300 连续三年下跌（2021 小幅、2022 大幅、2023 中幅），
 # 2020 与 2024-2025 为正。价格指数与全收益口径的负回报年份集合一致。
@@ -127,6 +143,15 @@ def run_self_check(bond, sleeve, yearly, cumulative, annualised):
     record(neg == CSI300_NEGATIVE_YEARS,
            f"沪深300 负回报年份与已知市场方向一致（应为 {sorted(CSI300_NEGATIVE_YEARS)}）")
 
+    # --- gt_variants 前提：两条沪深300 序列逐年必须充分分离 ---
+    # 容器 csi300_* 检查点容差 0.005；若某年两口径间距小于 CSI300_MIN_SERIES_GAP，
+    # 同一个数就可能同时通过两种口径，数值推断随之失效。此断言守护该前提。
+    gaps = {y: abs(sleeve[y] - CSI300_PRICE_YEARLY[y]) for y in YEARS if y in CSI300_PRICE_YEARLY}
+    tight = {y: round(g, 6) for y, g in gaps.items() if g < CSI300_MIN_SERIES_GAP}
+    record(not tight,
+           f"沪深300 两口径逐年间距均 >= {CSI300_MIN_SERIES_GAP}"
+           f"（gt_variants 数值推断的前提）{f'；过近年份 {tight}' if tight else ''}")
+
     # --- 权重 ---
     record(abs((W_BOND + W_SLEEVE) - 1.0) < 1e-12, "组合权重合计为 1")
 
@@ -176,11 +201,17 @@ def main():
     yearly, cumulative, annualised = control_group_metrics(bond, sleeve)
     passed, checks, failures = run_self_check(bond, sleeve, yearly, cumulative, annualised)
 
-    # 参考：用价格指数口径推出的对照组年化，容器容差需同时覆盖
-    _, price_cum, price_annual = control_group_metrics(bond, CSI300_PRICE_YEARLY_REFERENCE)
+    # 用价格指数口径推出的对照组年化：benchmark_annual_return 的容差仍需同时覆盖两者
+    # （该检查点未做 gt_variants 路由，见 gt_recipe.yaml 的 design_note）
+    _, price_cum, price_annual = control_group_metrics(bond, CSI300_PRICE_YEARLY)
 
     values = {f"bond_{y}": round(bond[y], 6) for y in YEARS}
     values["benchmark_annual_return"] = round(annualised, 6)
+    # 沪深300 两种口径各自作为 GT 键。容器的 csi300_<y> 检查点经 gt_variants 选中其一比对。
+    # tr 取自 sleeve（而非模块常量），使 --snapshot override 能传播到检查点真值。
+    for y in YEARS:
+        values[f"csi300tr_{y}"] = round(sleeve[y], 6)
+        values[f"csi300pr_{y}"] = round(CSI300_PRICE_YEARLY[y], 6)
 
     out = {
         "recipe": RECIPE_ID,
@@ -201,11 +232,13 @@ def main():
                 "bond_wealth_yearly": bond,
                 "csi300_total_return_yearly": sleeve,
             },
-            "caliber_note": "对照组 ETF 腿取沪深300 全收益口径（含分红再投资，贴近 ETF 实际持有）。"
-                            "价格指数口径也是合法选择，故容器对 benchmark_annual_return 的容差"
-                            "（0.0015）需同时覆盖两者；口径优劣由 D1 第二层锚点承载。",
+            "caliber_note": "沪深300 两种口径各自作为 GT 键输出（csi300tr_* / csi300pr_*）："
+                            "容器的 csi300_<y> 检查点经 gt_variants 按作品声明（或数值推断）的口径"
+                            "选中其一比对，另一条不参与该作品评分。对照组年化仍取全收益口径推导，"
+                            "其容差（0.0015）依旧需同时覆盖两种口径。"
+                            "口径**选择**的优劣由 D1 第二层锚点承载，口径内**数值**准确性由第一层度量。",
             "price_caliber_reference": {
-                "csi300_price_yearly": CSI300_PRICE_YEARLY_REFERENCE,
+                "csi300_price_yearly": CSI300_PRICE_YEARLY,
                 "benchmark_annual_return": round(price_annual, 6),
                 "benchmark_cum_return": round(price_cum, 6),
                 "annual_gap_vs_total_return": round(abs(annualised - price_annual), 6),

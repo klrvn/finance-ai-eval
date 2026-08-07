@@ -1,0 +1,62 @@
+recipe_id: irab_021_anchors
+kind: calculator
+
+calculator:
+  script: skills/eval-groundtruth/scripts/irab_021_anchors.py
+  sidecar: skills/eval-groundtruth/scripts/irab_021_anchors.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    - revenue_2025
+    - net_profit_2025
+    - total_assets_2025_eop
+    - equity_2025_eop
+    - revenue_2024
+    - net_profit_2024
+    - total_assets_2024_eop
+    - equity_2024_eop
+    - total_assets_2023_eop
+    - equity_2023_eop
+    - disclosed_roae_2025
+    - disclosed_roae_2024
+    - disclosed_roaa_2025
+    - disclosed_roaa_2024
+    - net_margin_2025
+    - net_margin_2024
+    - turnover_2025_eop
+    - turnover_2025_avg
+    - turnover_2024_eop
+    - turnover_2024_avg
+    - leverage_2025_eop
+    - leverage_2025_avg
+    - leverage_2024_eop
+    - leverage_2024_avg
+    - product_2025_eop
+    - product_2025_avg
+    - product_2024_eop
+    - product_2024_avg
+  side_outputs: []
+
+inputs_required:
+  - name: groundtruth_snapshot.json
+    optional: true
+    na_policy: "可选(override); 默认 GT 为计算器内嵌的冻结值, 网络无关, 不需要此文件"
+
+self_check: required        # self_check.passed 为假即停止评测（calculator 方案）
+
+# ---------------------------------------------------------------------------
+# percent_fields 故意不声明: 计算器已把 pct 类型量输出为 fraction 刻度(0.4449 而非 44.49),
+# 与提取器 validators.py 的规范化结果同刻度。声明会使 gt_dispatch.apply_percent_canon
+# 再除一次 100, 全部 pct 检查点必然失败。
+# ---------------------------------------------------------------------------
+
+design_note: >
+  真值分两类。第一类(14个原始财务数据锚点): 营业收入/归母净利润/总资产/归母权益
+  (2023-2025年末) 与年报披露的 ROAE/ROAA —— 真外部真值, 来自招商银行 A 股定期报告。
+  第二类(净利率/周转率/权益乘数/三因子乘积): 由第一类**计算**得出而非硬编码, 周转率/
+  权益乘数/乘积各有"期末口径"与"平均口径"两条合法序列, 均作为独立 GT 键输出, 容器的
+  turnover_*/leverage_*/roe_product_* 检查点通过 gt_variants 按候选作品声明的口径路由。
+
+  **不属于本 recipe 的真值**: 三因子乘积与年报披露 ROAE 之间没有"应该相等"这层真值——
+  两者口径不同(ROAE 剔除其他权益工具并按时间加权), gold facts 的 data_inconsistency
+  红线1 明确警示不可将二者混为一谈。给"乘积=ROAE"设一条检查点，等于把本题的核心陷阱
+  错误地编码成了正确答案。

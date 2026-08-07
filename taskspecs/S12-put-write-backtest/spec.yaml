@@ -1,5 +1,5 @@
 task_id: S12
-version: 1.0.0
+version: 1.1.0
 family: quant-backtest
 tier: T1
 persona: 量化研究员
@@ -29,6 +29,8 @@ prompt_text: >
 measurable_outputs:
   - 策略组与对照组各 5 项指标（累计收益、年化收益、最大回撤、年化波动率、夏普比率）
   - 中债-综合财富（总值）指数 2020-2025 逐年回报（6 个数值，财富口径）
+  - 沪深300 指数 2020-2025 逐年回报（6 个数值；全收益与价格指数两种口径均合法，
+    按作品自己声明的口径路由到对应真值序列比对）
   - 对照组年化收益率（可由逐年回报 + 年度再平衡确定性推导）
   - 计算链自洽性：累计与年化互推闭合、夏普比率与自报的收益/rf/波动率闭合、跨组差异与袖子收益闭合
   - 中间量披露：无风险利率取值、两组袖子收益、再平衡口径声明、波动率数据频率声明
@@ -50,27 +52,32 @@ objective_scoring_mode: binary
 
 # T1 的适用范围说明（重要）：
 #   本任务的 tier 标为 T1，指的是「输入层与方法层可确定性核验」——
-#   输入层（中债逐年回报）有外部真值，方法层（计算链闭合关系）有可执行的内部真值路径。
+#   输入层（两支指数的逐年回报）有外部真值，方法层（计算链闭合关系）有可执行的内部真值路径。
 #   但**输出层（策略组的五项指标）不存在唯一真值**：历史期权权利金无公开权威序列，
 #   且结果取决于 IV、保证金口径、换仓滑点等定价假设，属模型依赖而非数据缺失。
 #   因此策略组指标一律以内部类型（reconcile/consistency/present）承载，不设点值 GT。
-#   全部 NEEDS_GT 类型的检查点（7 个 pct）都有真实真值路径，无伪确定性。
+#   全部 NEEDS_GT 类型的检查点（13 个 pct）都有真实真值路径，无伪确定性——
+#   其中 6 个沪深300 逐年检查点的真值路径是「两条合法口径序列 + gt_variants 按作品口径路由」，
+#   仍是可执行的确定性真值，不是放宽容差蒙过去的伪确定性。
 
-citation_policy: {mode: sample, k: 4}
-# 4 条承重引用：中债指数数据源、沪深300 指数数据源、510330 期权挂牌事实、保证金规则
+citation_policy: {mode: none}
+# 引用核验已关闭：D1 Layer 1 只看 grounding 检查点，评测不再为核验引用而联网。
 
-cf_rules: [CF1, CF2, CF5]
+cf_rules: [CF1, CF5]
+# CF2（未引用主张）未启用——依赖引用审计，而本任务已关闭引用核验（citation_policy: none）。
 # CF3（只描述不执行）未启用——「没真算」的惩罚交由 D6 扣分承担（最重 -2 使该维度归零，
 #   损失 15 权重），叠加捏造数字几乎必然通不过一致性闭合对 D2:35 的打击。
 #   相比 CF3 一刀切把 D2+D3=50 权重封顶到等级 1，这个组合按错误严重程度逐笔累积，更精准。
 # CF4（陈旧数据当当前用）未启用——本任务是固定历史区间回测，不存在「当前数据」场景。
-cf_thresholds:
-  CF2_uncited_ratio: 0.25
+cf_thresholds: {}
 
-d1_objective_weights: {citation: 0.3, grounding: 0.7}
-# 沿用 data-retrieval 家族（S9/S10）的比例。grounding 腿为 6 个中债逐年检查点。
+# 沿用 data-retrieval 家族（S9/S10）的比例。
+# grounding 腿为 12 个检查点：6 个中债逐年 + 6 个沪深300 逐年（后者按口径路由）。
 
-# grounding_group_weights 未声明：6 个逐年检查点等权，各年同等重要。
+# grounding_group_weights 未声明：12 个逐年检查点等权。
+#   两支指数同等重要——都是作品必须正确取数的外部市场数据，题面也都点名要求交付。
+#   作品若从未报沪深300 逐年数字，那 6 个检查点转 NA 并从分母剔除，
+#   grounding 腿自动退回「只由 6 个中债检查点构成」，不会因此获得虚高基线。
 
 required_inputs:
   - name: groundtruth_snapshot.json
@@ -79,6 +86,7 @@ required_inputs:
 
 task_validators:
   - {name: bond_caliber_discipline, realized_by: "checkpoint bond_2020..bond_2025（财富口径，净价/全价会整体偏离约 3%/年，紧容差可捕获）"}
+  - {name: csi300_caliber_routing, realized_by: "checkpoint csi300_2020..csi300_2025 + 路由字段 csi300_caliber（gt_variants 按作品声明口径选中全收益或价格指数真值序列；两种合法口径都能通过第一层，口径选择优劣由 D1 第二层承载）"}
   - {name: computation_chain_closure, realized_by: "checkpoint strategy/benchmark 的累计-年化互推、夏普闭合、跨组差异闭合"}
   - {name: intermediate_disclosure, realized_by: "checkpoint intermediate_disclosure_count（count_min，5 项中至少 3 项）"}
   - {name: proxy_and_assumption_honesty, realized_by: "盲评 D1/D2 第二层锚点 + present 检查点 proxy_disclosed"}
@@ -90,8 +98,14 @@ engine_requirements:
   checkpoint_types: [pct, present, count_min, reconcile, consistency]
   tolerance_policy: >
     中债逐年回报：官方/媒体披露值（2021、2024）tol 0.002；公开基准推算值（2020、2022、2023、2025）
-    tol 0.005。对照组年化 tol 0.0015——恰好容纳沪深300 全收益口径与价格指数口径两种合法选择
-    （二者年化相差约 13bp），口径优劣由 D1 第二层锚点承载而非在第一层判错。
+    tol 0.005。
+    沪深300 逐年回报 tol 0.005——不再需要「一个容差同时容纳两种口径」，因为这 6 个检查点
+    经 gt_variants 按作品声明的口径路由到对应真值序列（全收益或价格指数）。两条序列逐年
+    最小间距 1.68pp（2021）是容差 0.5pp 的三倍以上，故同一个数不可能同时通过两种口径，
+    路由后判定与「未声明口径时的数值推断」都无歧义；该前提由计算器 self_check 断言守护。
+    对照组年化 tol 0.0015——**有意不做 gt_variants 路由**，仍用宽容差同时容纳两种口径
+    （二者年化相差约 13bp）：它是跨口径的聚合量，路由它会与逐年检查点重复度量口径判定。
+    口径**选择**的优劣由 D1 第二层锚点承载，口径内**数值**准确性由逐年检查点在第一层度量。
     闭合检查点的容差按导数不对称设定：由累计推年化 tol 0.001（灵敏度约 0.135，输入舍入被压缩）；
     由年化推累计 tol 0.004（灵敏度约 7.3，输入舍入被放大 6 年复利）。
     夏普闭合用 rel:true tol 0.06——低波动组合（σ≈2%）的分母很小，年化收益的 0.1pp 舍入会

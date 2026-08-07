@@ -1,0 +1,49 @@
+calculator_id: irab_030_anchors
+script: irab_030_anchors.py
+version: "1.0"
+family: data-retrieval
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+outputs:
+  - export_usa
+  - import_usa
+  - balance_usa
+  - export_china
+  - import_china
+  - balance_china
+  - export_singapore
+  - import_singapore
+  - balance_singapore
+  - export_india
+  - import_india
+  - balance_india
+  - export_vietnam
+  - import_vietnam
+  - balance_vietnam
+  - export_japan
+  - import_japan
+  - balance_japan
+  - export_thailand
+  - import_thailand
+  - balance_thailand
+  - export_korea
+  - import_korea
+  - balance_korea
+  - export_total
+  - import_total
+  - balance_total
+side_outputs: []
+needs_market_data: false
+self_check: >
+  19 项: 8 国+全国合计的差额(出口-进口)计算值与 gold 参考差额一致(±1 RM百万) = 9 项；
+  8 国的顺差/逆差方向与已知方向一致(美/新/印/越/日/泰=顺差, 中/韩=逆差) = 8 项；
+  全国合计为顺差 = 1 项；8国差额之和与全国合计差额应有明显差距(全国合计覆盖8国之外的
+  其他贸易伙伴, 两者不应相等) = 1 项。
+scale: "RM 百万(RM million); 出口 FOB, 进口 CIF; 差额为出口-进口, 正为顺差、负为逆差。"
+out_of_scope: >
+  "8国之和 == 全国合计"不是真值关系——马来西亚的贸易伙伴远不止这8个, 全国合计覆盖全部
+  贸易伙伴。任何试图让8国之和逼近全国合计的"修正"都是错误的, self_check 反而断言两者
+  应有明显差距。
+data_cutoff: "2026-03-19（DOSM《Malaysia External Trade Statistics Bulletin, February 2026》发布日）"

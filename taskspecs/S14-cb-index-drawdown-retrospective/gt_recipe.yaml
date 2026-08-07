@@ -1,0 +1,96 @@
+recipe_id: cb_index_drawdown
+kind: calculator
+
+calculator:
+  script: skills/eval-groundtruth/scripts/cb_index_drawdown.py
+  sidecar: skills/eval-groundtruth/scripts/cb_index_drawdown.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    - R1_peak_date
+    - R1_peak_price
+    - R1_trough_date
+    - R1_trough_price
+    - R1_max_drawdown_pct
+    - R1_benchmark_return_pct
+    - R1_premium_before_pct
+    - R1_premium_after_pct
+    - R1_recov_from_high
+    - R1_recov_from_low
+    - R2_peak_date
+    - R2_peak_price
+    - R2_leg1_low_date
+    - R2_leg1_low_price
+    - R2_rebound_date
+    - R2_rebound_price
+    - R2_trough_date
+    - R2_trough_price
+    - R2_max_drawdown_pct
+    - R2_leg1_benchmark_return_pct
+    - R2_leg2_benchmark_return_pct
+    - R2_premium_before_pct
+    - R2_premium_after_pct
+    - R2_recovery_days_valuation
+    - R3_peak_date
+    - R3_peak_price
+    - R3_trough_date
+    - R3_trough_price
+    - R3_max_drawdown_pct
+    - R3_benchmark_return_pct
+    - R3_premium_after_pct
+    - R3_recovery_days_valuation
+    - R3_recovery_days_point
+    - R4_peak_date
+    - R4_peak_price
+    - R4_trough_date
+    - R4_trough_price
+    - R4_max_drawdown_pct
+    - R4_benchmark_return_pct
+    - R4_premium_before_pct
+    - R4_premium_after_pct
+    - R4_recovery_days_point
+    - R4_credit_event_facts
+  side_outputs: []
+
+# ---------------------------------------------------------------------------
+# 【关键】percent_fields 故意不声明 —— 见 S9 v2.4.3 / S10 v1.0.1 的反向踩坑记录。
+# 计算器输出的 pct 量已经是 fraction 刻度(-0.122 而非 -12.2), 与提取器同刻度。
+# 声明 percent_fields 会让 gt_dispatch.apply_percent_canon 再除一次 100, 全部 pct
+# 检查点失败。日期字段(YYYYMM 整数)与 recovery_days(整数天数)不受此影响。
+# ---------------------------------------------------------------------------
+
+self_check: required        # self_check.passed 为假即停止评测
+
+inputs_required:
+  - name: groundtruth_snapshot.json
+    optional: true
+    na_policy: "可选(override); 默认 GT 为计算器内嵌的冻结值, 网络无关, 不需要此文件"
+
+fixtures:
+  dir: fixtures
+  files:
+    snapshot: groundtruth_snapshot.json   # 内嵌值的可读镜像 / 可选 override
+  design_note: >
+    真值分三类, 可核验程度不同。
+
+    第一类(点值外部真值, 40 个 GT 键): 逐轮峰谷日期/价格、收盘口径最大跌幅、
+    沪深300 同期对照收益率、拟合百元(fitted-to-par)口径溢价率水平、点位/估值修复
+    交易日数、2024 信用事件标志性事实。全部来自 IRAB irab-011 gold facts(该文件
+    本身声明"多源一致": 中证指数公司官方数据 + 华创/兴业/华安/东吴/Wind 测算)。
+
+    第二类(有意不设点值真值的缺口, 2 处): R3 2023-08 起点的拟合溢价率——gold facts
+    未给出精确值, 只给了 2024-02-05 低点(18.3%)与 05-20 修复目标(26.19%); R4 的
+    估值修复天数——gold facts 明确该修复在 2025 年 1 月末仍未完成(开放区间, 非确定
+    天数)。给这两处编一个点值会违反"真值只用在真正存在唯一答案的地方"的原则,
+    伪确定性反而会误判诚实标注数据缺口/修复未完成的正确行为。
+
+    第三类(候选作品自己已报数值间的内部自洽关系, 不需要独立真值键): 溢价率收缩
+    幅度(pp)与"峰谷价格-跌幅%互算"一致性, 分别由容器的 reconcile(*_premium_
+    compression_pp)与 consistency(*_drawdown_price_consistency)检查点在评分时
+    直接对候选作品自己的已报字段求值。
+
+    均值/算术平均口径的溢价率**不**在本 recipe 输出范围: gold facts 对该口径只给出
+    部分轮次的单点数值(2022年初约35%、10月高点52.60%、年末41.88%; 2024-08算术
+    平均69.91%), 不足以支撑四轮一致的点值真值序列。口径选择本身(是否声明、是否
+    静默切换)由 judge_notes 的 D1/D2 第二层锚点承载, 不在第一层设第二条数值序列
+    (与 S12 的沪深300 全收益/价格指数 gt_variants 场景不同——那里两条序列的口径内
+    数值都有完整来源, 这里均值口径的口径内数值本身就不完整)。

@@ -1,6 +1,6 @@
 {
   "name": "eval-judge",
-  "version": "1.3.0",
+  "version": "1.4.1",
   "description": "Financial-analysis evaluation orchestrator. Three-layer architecture (rubric constitution + per-task frozen containers + task-agnostic engine skills) runs a full pipeline from field extraction to a unified, evidence-backed scorecard, with blind rubric scoring dispatched to an isolated subagent. Scales to new tasks via containers.",
   "author": {
     "name": "AlphaMind"

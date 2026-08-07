@@ -1,0 +1,61 @@
+{
+  "task_id": "S14",
+  "version": "1.0.0",
+  "origin": "legacy-v1",
+  "authored_by": "eval-judge container-authoring, adapted from IRAB irab-011 (Investment Research Agent Benchmark, Rabyte Technology, CC BY 4.0)",
+  "origin_note": "New authored container (not a v1 migration). origin is tagged 'legacy-v1' to satisfy the spec-lint governance gate, which currently only accepts that value; true authorship is recorded here.",
+  "design_thesis": "irab-011 的 gold 文件本身已经把评分逻辑的大半写好了: facts 给出四轮回撤的精确点位/日期/溢价率/基准对照数值, data_completeness/user_need_coverage 给出'轮次x五要素'的必给清单, data_distortion/data_inconsistency 给出一份详尽的失真陷阱清单(其中'峰谷点位与跌幅%必须能互算'被明确列为最高发陷阱), reasoning_angle_coverage 给出8个只能靠判断力覆盖的深度角度。本容器的设计因此是直译而非再创造: 40个可数值核验的事实(点位/日期/跌幅%/溢价率水平/修复天数/信用事件)全部转成 D1 grounding 检查点; gold facts 自己列出的两条cross-foot陷阱(峰谷价格-跌幅%互算, 溢价率收缩pp闭合)转成 D2 的 consistency/reconcile 检查点, 不需要外部真值, 直接对候选作品自己的已报数值求值; 8个推理角度与两个跨轮问题因为不可数值化, 全部收进 D4 判官锚点, 给到本容器最高权重(30, 与D1并列)。",
+  "why_no_r3_premium_before_gt": "gold facts 对2023-08-04(R3起点)的拟合百元口径溢价率没有给出精确数值——facts只报告了R3的低点(2024-02-05, 约18.3%)与低点之后的修复目标(2024-05-20, 26.19%, 华安口径), 这两个都是'跌到底之后'的数字, 不是'跌之前'的起点。给R3起点编一个数字会违反'真值只用在真正存在唯一答案的地方'的原则, 因此R3不设 premium_before_pct/premium_compression_pp, 只保留 premium_after_pct(低点水平, 有精确来源)。",
+  "why_no_r4_valuation_recovery_days_gt": "gold facts 明确指出R4的估值修复(拟合溢价率)截至2025年1月末仍未完全回到历史中位(约30%), 且修复天数用'>76个交易日'这种开放下界表述, 不是一个已完成、确定的天数。给一个开放区间编造点值真值, 会把'诚实标注修复未完成'这一gold facts明确要求的正确行为判错。因此R4只设 recovery_days_point(点位修复, 31个交易日, 确定完成), 并额外设 R4_valuation_recovery_incomplete_noted(present) 检查点要求候选作品自己指出这一'点位已修复但估值未修复'的背离——这正是reasoning_angle_coverage第6条'本题最深一层'的考点。",
+  "why_no_mean_caliber_gt_variants": "均值/算术平均口径的溢价率数值不像S12的沪深300全收益/价格指数那样两条序列都有完整来源——gold facts只给出该口径的孤立单点(2022年初约35%、2022-10-28高点52.60%、2022年末41.88%、2024-08-02算术平均69.91%), 缺乏与拟合百元口径对齐的逐轮前后完整序列, 不足以支撑第二条gt_variants分支。因此本容器只对拟合百元口径设点值真值, 均值口径的口径选择/口径声明/口径混用问题全部收进judge_notes的D1/D2第二层锚点, 不在第一层设第二条数值序列。",
+  "method_evidence": "64个检查点分三组(实测 grounding=42, methodology=13, 无标签=9): (1) D1第一层42个grounding检查点(外部真值, 含1个set_match), 覆盖逐轮峰谷日期(YYYYMM整数, tol=0)/价格(tol 0.5% rel)/收盘口径最大跌幅%(tol 1pp)/沪深300同期对照收益率%(tol 1pp)/拟合百元口径溢价率水平(tol 2.5pp)/估值与点位修复交易日数(tol 15%rel, R2因gold facts给出较宽区间放宽至35%rel)/2024信用事件标志性事实(set_match, tol 1); (2) D2第一层13个methodology检查点: 4个consistency核验'候选作品自己所引峰谷价格能否互算出自己所报的跌幅%'(gold facts data_inconsistency #1的机械化版本, 不读取外部真值)、3个reconcile核验'溢价率收缩pp与自报前后溢价率之差'(R1/R2/R4, R3因数据缺口不设)、4个present(逐轮driver_classification, 驱动判定声明)、1个present(caliber_declared_global)、1个present(R4_valuation_recovery_incomplete_noted, 修复背离声明); (3) 9个present/count_min检查点无标签(逐轮口径审计字段×4、rounds_covered_count、两个跨轮问题present字段、cross_round_recovery_comparison), 不锚定任何维度分数, 只留审计痕迹供判官参考。gt_variants仅用于R1的修复口径路由(distance-from-high vs distance-from-low, 两者都是gold facts明确给出的合法计量起点, 终点相同)。grounding腿为42个等权检查点。",
+  "key_design_decisions": {
+    "consistency_over_reconcile_for_drawdown_crossfoot": "峰谷价格与跌幅%的互算一致性用 `consistency`(lhs/rhs两个独立表达式求值比较)而非 `reconcile`(要求检查点自身字段有候选作品的已报值再与公式比较)。原因: max_drawdown_pct 本身需要独立的外部真值锚定(候选作品可能报出一个既不匹配GT也不匹配自己峰谷价格的第三个数字), 若把它类型改成 reconcile 就失去了外部真值锚定; 因此把'互算是否自洽'做成一个**额外的、不读取GT**的 consistency 检查点, 与'跌幅%是否等于GT'的第一层pct检查点并存, 两者度量的是两件不同的事, 不构成双罚。",
+    "reconcile_for_premium_compression": "溢价率收缩pp用 `reconcile`(而非新建一个与GT比较的pct检查点), 因为'收缩pp'这个量本身没有独立于'前后溢价率水平'的外部真值——它就是前后两个已有grounding检查点的算术差。用reconcile直接对候选作品自己的premium_before_pct/premium_after_pct字段求值, 既避免了给同一件事设两条独立于GT的重复判定路径, 也精确捕获gold facts明确警示的'pp(百分点)与%(相对变化)混用'陷阱——若候选作品把-10pp误算成-35.7%, reconcile会在这里fail。",
+    "r1_recovery_gt_variants": "R1唯一使用gt_variants的检查点。gold facts原文'估值修复——第一轮(拟合回到约28%)距2/15约113-125个交易日(距4/26低点约77个交易日)'表明同一个修复终点(拟合溢价率回到约28%)有两个合法的计量起点(2月估值最低点 vs 4月价格最低点), 与S12的沪深300全收益/价格指数caliber场景结构相同——两个变体都是gold facts明确给出、都有精确数值支撑, 因此值得用gt_variants路由而不是放宽容差合并(合并会需要tol覆盖113-125与77两个不相交区间, 失去鉴别力)。R2的64-123区间则不做gt_variants处理, 因为gold facts没有给出两个独立的、各自精确的计量起点变体, 只是一个单一的宽区间, 用宽容差(35% rel)覆盖即可, 不需要路由机制。",
+    "date_as_yyyymm_not_yyyymmdd": "日期字段编码为YYYYMM整数而非YYYYMMDD, 因为题面与gold facts data_completeness明确声明'月份级即可算present, 给到具体日期更优'——把颗粒度要求直接编码进真值刻度里, 避免了YYYYMMDD整数差在跨月时不等于自然日差的算术陷阱(如1月31日到2月1日, YYYYMMDD差是70而非1), 也避免了为'给到具体日期'单独设一层更细的检查点(该项作为质量深度信号交给D4判官定性认可, 不重复设分)。",
+    "why_r4_is_the_hardest_round": "R4(2024年5-9月信用冲击轮)是本容器唯一同时具备'资产端触发'(区别于前三轮的负债端触发)、'发生于债牛环境'(债市利率下行, 打破'债牛支撑转债估值'的常规认知)、'点位-估值修复背离'(点位31个交易日快速收复, 估值4个月以上未完成)三重深度考点的轮次, 因此单独给它配了两个D4专属锚点(触发器辨析、修复背离)与一个专属present检查点(R4_valuation_recovery_incomplete_noted), 权重密度高于其他三轮——这是有意的, 因为gold facts的reasoning_angle_coverage把这一轮的深度要求描述为'本题最深一层'。",
+    "cf3_enabled_unlike_s12": "与S12(put-write-backtest, CF3未启用)不同, 本容器**启用**CF3。理由: S12的输出层(策略组指标)天生无法设定点值GT(依赖定价假设), 启用CF3会误伤'诚实标注假设区间'的正确行为; 而S14的核心事实(逐轮点位/跌幅%/溢价率)是历史市场记录, 有明确、可核验的真值, 一份'只泛泛描述转债跌过几轮而不给任何数值'的作品理应被CF3的D2+D3封顶到等级1锁定, 而不是任其在检查点层面自然失分——两个容器对CF3的取舍差异源于'输出层是否天然存在唯一真值'这一结构性区别, 不是随意选择。"
+  },
+  "prompt_deviation_from_irab": [
+    "prompt_text 与 IRAB irab-011 task 原文逐字一致, 未做任何补全或改写——原题面本身已经把'轮次+五要素+两个跨轮问题'的需求网格表述得足够精确, 不存在S12遇到的'再平衡约定缺失'一类规格缺口。"
+  ],
+  "irab_rubric_mapping": {
+    "facts_and_data_completeness": "D1第一层的40个grounding检查点(逐轮点位/日期/跌幅%/溢价率水平/修复天数/信用事件) + D3的五要素齐备性锚点",
+    "reasoning_angle_coverage": "D4的判官锚点全覆盖(W型内部结构/主动被动判定方法论/概念澄清/口径自觉/三类触发器辨析/修复速度对权益的依赖/主动扩张条件函数/范式变化视角), 是本容器D4权重最高(30, 与D1并列)的直接原因",
+    "user_need_coverage": "D3完整性锚点(轮次覆盖/五要素齐备/收缩逻辑明确判定/两个跨轮问题正面回答/口径与数据交代)",
+    "data_distortion": "D1第二层的来源/口径锚点(指数张冠李戴/时间锚错位/口径错置/事件性质互换/期外冒充) + CF1(捏造)/CF4(期外数据冒充当期)",
+    "data_inconsistency": "D2第一层的consistency(峰谷-跌幅%互算)/reconcile(溢价率收缩pp闭合)检查点 + D2第二层的口径静默切换/pct-pp混用锚点——这是本容器与gold文件对齐度最高的一段映射, gold facts的data_inconsistency小节几乎逐条对应到一个具体检查点或judge_notes锚点"
+  },
+  "engine_versions": {
+    "grader": "1.1 (gt_variants: multi-convention ground-truth routing; see resolve_gt_variants in grade_checkpoints.py)",
+    "aggregator": "2.3",
+    "extractor": "1.0",
+    "calculator": "cb_index_drawdown.py v1.0 (frozen snapshot from IRAB irab-011 gold facts, network-free)"
+  },
+  "data_provisioned": {
+    "mode": "snapshot",
+    "gt_kind": "calculator",
+    "calculator": "cb_index_drawdown.py v1.0",
+    "network": false,
+    "n_gt_values": 43,
+    "scale": "pct fields as fraction (-12.2% -> -0.122); date fields as YYYYMM integers; recovery days as integer trading-day counts. gt_recipe.yaml MUST NOT declare percent_fields for the pct keys.",
+    "data_cutoff": "2026-08-07(irab-011 gold facts 冻结快照, 覆盖2022-2024三个完整年度, 不随时间变化)",
+    "self_check": "45项(实测): 逐轮价格/日期落在合理区间, 日期时序正确, 已声明的max_drawdown_pct(四轮均已登记)与峰谷价格互算一致(容器自身核心数字未被算错), 跌幅落在四轮共有的-7%~-13%区间, 溢价率落在拟合百元口径10%-30%区间, R1两个修复口径变体的相对顺序合理(from_low<from_high), R3估值修复快于点位修复, 已知市场方向(沪深300同期涨跌)与转债走势的脱钩/跟随关系符合gold facts。"
+  },
+  "coverage_gaps": {
+    "mean_caliber_premium": "均值/算术平均口径的溢价率数值没有独立的第一层真值序列, 只能靠D1/D2第二层锚点定性覆盖(见why_no_mean_caliber_gt_variants)。",
+    "r3_premium_before": "R3起点(2023-08-04)的拟合百元口径溢价率没有点值真值(见why_no_r3_premium_before_gt)。",
+    "r4_valuation_recovery_days": "R4的估值修复天数是开放区间(截至2025年1月未完成), 不设点值真值, 只设一个present检查点要求候选作品自己承认未完成(见why_no_r4_valuation_recovery_days_gt)。",
+    "r1_r2_never_recovered_point_level": "R1(437.69)与R2(430.68)的点位在2022-2024窗口内均从未被收复(R1直至2025年3月才被突破), 这是一个确定事实但不是'天数'——本容器未设正向checkpoint覆盖, 依赖D1第二层锚点('断言收复了前高但实际未收复→判定为来源质量缺陷')与gold facts data_distortion #2捕获虚假'已收复'断言, 是一个已知的检查点覆盖空缺, 与S12的max_drawdown覆盖空缺同类(合理性判断留给判官, 不构成双罚)。"
+  },
+  "verification_log": {
+    "calculator_run": "2026-08-07 实测通过(修复一处漏洞后): 首次运行时 R2/R3/R4 的 max_drawdown_pct 未在 ROUNDS 常量里显式登记(只有R1有), 导致自检漏检这三轮的跌幅算术、且这三个检查点在评分时对任何候选作品(包括完美答案)都会判 NA——这正是本容器自己反复强调的'峰谷点位与跌幅%必须能互算'规则被作者自己踩了一次。补上三个常量后: 43个GT值(较修复前40个多3个), self_check 45/45 全部通过, 全部逐轮 max_drawdown_pct 与峰谷价格互算一致(R1 -0.1218≈-0.122, R2 -0.0980≈-0.098, R3 -0.1050≈-0.105, R4 -0.1008≈-0.101)。",
+    "spec_lint": "2026-08-07 实测: `spec_lint.py --root .` 对全部14个容器跑通, 0 error; S14 为 PASS(无warn)——与S2/S9/S10/S11/S12/S13 并列全绿, 未触发其余6个legacy容器共有的D1/D2两层disjointness WARN(judge_notes.md 每个objective维度均有第一层/第二层标题)。",
+    "checkpoint_grader_smoke_test": "2026-08-07 手工构造两份 normalized.json(不经过完整的LLM抽取子代理, 直接模拟提取器输出)对 grade_checkpoints.py 实测: (1) 一份完全贴合GT的'good'候选 → pass_fraction=1.0, grounding_pass_fraction=1.0, methodology_pass_fraction=1.0, 0个NA, 0个cf5命中——确认64个检查点(含gt_variants路由、reconcile、consistency、set_match)在正确答案上全部机械可通过, 不存在'即使答对也判错'的容器缺陷。(2) 一份故意有缺陷的'flawed'候选(R1跌幅%与自引峰谷点位对不上、R1溢价率数字实为均值口径却标'fitted'导致既未过grounding也未过reconcile闭合、R4信用事件把广汇误标为到期违约、只覆盖1轮) → pass_fraction=0.1333, R1_max_drawdown_pct/R1_drawdown_price_consistency/R1_premium_before_pct/R1_premium_compression_pp 全部命中cf5(按预期捕获cross-foot矛盾与口径-数值不符), R4_credit_event_facts因标识符不匹配判fail, 未报告的R2-R4逐项检查点全部判fail而非NA(确认'藏数据不比照实报便宜', 与S12的反向激励防线一致), 涉及缺失前提的consistency检查点正确判NA而非误判fail(R2-R4的drawdown_price_consistency, 因缺少峰谷价格输入无法求值)。",
+    "gold_answer_key_dry_run": "pending — 完整LLM抽取+盲评判官子代理端到端跑通(经由 /eval-judge S14)尚未做; 上述智能检查点冒烟测试验证的是评分器机械层, 不覆盖提取器与判官的主观判断质量。"
+  },
+  "review_status": "draft",
+  "container_hash": "995fa1dff20b1b38",
+  "notes": "Family: market-drawdown-retrospective(新家族, S2/S12的quant-backtest近亲, 但可核验性结构不同: S2/S12测的是'计算链是否自洽', S14测的是'历史事实是否取对+cross-foot是否自洽+判断深度'三件事并重)。Weights: D1:30 D2:20 D3:15 D4:30 D5:0 D6:5。CF: CF1+CF3+CF4+CF5(不含CF2, citation_policy=none)。Scoring mode: binary。64个检查点(实测): 42 grounding(YYYYMM日期/价格/跌幅%/基准对照%/溢价率水平/修复天数/信用事件set_match, 等权) + 13 methodology(4 consistency互算闭合 + 3 reconcile收缩pp闭合 + 4 driver_classification + caliber_declared_global + R4_valuation_recovery_incomplete_noted) + 9 present/count_min无标签(口径审计×4 + rounds_covered_count + cross_round_recovery_comparison + 两个跨轮问题present字段)。"
+}

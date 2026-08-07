@@ -1,6 +1,6 @@
 {
   "task_id": "S11",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "origin": "legacy-v1",
   "authored_by": "eval-judge container-authoring, from user-provided question set (S11_web_search.md) and definite answer key with scoring rules (S11_GT.md)",
   "origin_note": "New authored container (not a v1 migration). origin is tagged 'legacy-v1' to satisfy the spec-lint governance gate, which currently only accepts that value; true authorship is recorded here.",
@@ -17,7 +17,7 @@
     "calculator": "news_search_snapshot.py v1.1 (snapshot, embedded answer key)"
   },
   "review_status": "frozen",
-  "container_hash": "0ba399d7f5f03f73",
+  "container_hash": "a9a0adfcc49f8ad9",
   "data_provisioned": {
     "mode": "snapshot",
     "gt_kind": "calculator",
@@ -88,6 +88,7 @@
     "not_applicable": "Numeric scalar checkpoints are robust: trailing zeros, int-vs-float, and higher precision all round-trip correctly through validators + the decimals-anchored comparison."
   },
   "changelog": {
+    "1.1.1": "ANSWER-KEY CORRECTION (题目三 第4点). Q3_4_islamabad_talks_window was 20260611/20260612 (June); corrected to 20260411/20260412 in news_search_snapshot.py (embedded key) and fixtures/groundtruth_snapshot.json (readable mirror); tests/point_scheme_test.py regenerated from the corrected key (PERFECT case plus the two 第4点 variants: start-day-only 20260411, end-day-off-by-one 20260411/20260413). ROOT CAUSE — NOT a transcription slip in this container. The container faithfully copied the source answer key: S11_GT.md §3.1 row 4 itself read 2026年6月11日 - 2026年6月12日 at authoring time (verified against the 2026-07-28 16:08 and 16:11 revisions of that document). The 2026-07-28 grading run then failed Q3_4 on EVERY work with Δ=200 (20260611−20260411); the owner identified the source date as wrong, web search confirmed 4月11–12日 (新华网/央视/人民网), the run-directory groundtruth.json was patched in place, and S11_GT.md was corrected to April at 18:04 the same day. The container was never re-derived from the corrected source — so the defect survived in the frozen key and the 2026-08-05 run reproduced it undetected. The failure is a missing source->container re-derivation step, not an authoring typo. WHY NO GATE CAUGHT IT: (a) gt self_check validates SHAPE only — it asserts the talks window is two consecutive calendar days, which 20260611/20260612 satisfies; (b) tests/point_scheme_test.py had been generated FROM the key it was meant to check, so the 14-case conformance suite passed circularly; (c) spec_lint was green throughout; (d) container_hash covers spec/checkpoint_schema/gt_recipe/judge_notes only — it does NOT cover the calculator or fixtures/, so it did not move when the answer key changed and offers no tamper protection for GT. OPEN GOVERNANCE GAPS (not fixed by this version): provenance.source_files points at C:/Users/RBLU/Documents/alphamind-eval-skills/tasks/S11_GT.md, which no longer exists on disk — the container cannot be re-derived from or diffed against its declared source; and no gate compares the frozen key to that source. Corrected 2026-08-05.",
     "1.1.0": "Tracks the revised question set + answer key (read 2026-07-28). 题目三 restructured from seven items to six: REMOVED the old 第4点 (巴总理宣布美伊敲定 MOU、美国随后解除海上封锁) and the old 第6点 (三艘船只遭袭的两日区间); ADDED a new 第4点 (美伊伊斯兰堡会谈的两日日期) as an all-or-nothing two-day vector per the owner's decision; 第5点 (签署谅解备忘录) GAINED a ±1-day tolerance it did not previously have; the old 第7点 (宣布休战结束) became 第6点 with unchanged values. Bank total moves 13 -> 12 and the Kimi pricing item is now the only partial-credit point. Also: 题目一第2题 now states 以美元作答 in the prompt, so the USD-only extraction rule is backed by the question text itself; prompt_text adopts the corrected 黑芝麻智能 spelling and now matches the question set verbatim. Checkpoints 15 -> 13, groups 13 -> 12. Calculator bumped to v1.1 with a self-check that additionally verifies the talks window is two consecutive days. Finalised 2026-07-28 after the source documents were corrected (题目三 header -> （6分）, 第5点 容错 documented in 3.2/3.3): Q3_5's checkpoint description now mirrors the wording used for 第2点/第6点 instead of pointing at the table as the sole authority. Description-only change — the 14-case conformance test is unaffected.",
     "1.0.0": "Initial container. Weights identical to S10 (D1:60 D2:12 D3:8 D4:0 D5:0 D6:20). D1 Layer 1 = 0.3*citation + 0.7*grounding (same as S9/S10). D1 Layer 2 cancelled per user direction. 13-point scheme realized via grounding_group_weights over 15 checkpoints. Post-freeze audit clarification: the Kimi-pricing extraction contract forbids CURRENCY conversion outright (scale conversion per-1K->per-1M stays allowed) — the previous wording could invite the extractor to apply a remembered FX rate, which is not a deterministic conversion; a non-USD answer is recorded MISSING with the original in evidence, failing as the caliber miss it is."
   },

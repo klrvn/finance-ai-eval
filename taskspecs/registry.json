@@ -126,7 +126,7 @@
       "title": "金融消息面 Web Search 取数",
       "family": "news-data-retrieval",
       "tier": "T1",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "status": "frozen",
       "origin": "legacy-v1",
       "path": "taskspecs/S11-news-data-retrieval"
@@ -136,10 +136,60 @@
       "title": "Put-Writing 策略回测",
       "family": "quant-backtest",
       "tier": "T1",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "status": "frozen",
       "origin": "legacy-v1",
       "path": "taskspecs/S12-put-write-backtest"
+    },
+    {
+      "task_id": "S13",
+      "title": "存储扩产国产设备受益测算",
+      "family": "capex-allocation",
+      "tier": "T2",
+      "version": "1.0.0",
+      "status": "frozen",
+      "origin": "legacy-v1",
+      "path": "taskspecs/S13-fab-capex-localization"
+    },
+    {
+      "task_id": "S14",
+      "title": "中证转债指数2022-2024回撤复盘",
+      "family": "market-drawdown-retrospective",
+      "tier": "T1",
+      "version": "1.0.0",
+      "status": "frozen",
+      "origin": "legacy-v1",
+      "path": "taskspecs/S14-cb-index-drawdown-retrospective"
+    },
+    {
+      "task_id": "S16",
+      "title": "招商银行杜邦分析",
+      "family": "irab-import-hybrid-model-correctness",
+      "tier": "T2",
+      "version": "1.0.0",
+      "status": "draft",
+      "origin": "legacy-v1",
+      "path": "taskspecs/S16-irab-021-import"
+    },
+    {
+      "task_id": "S17",
+      "title": "马来西亚贸易差额查询",
+      "family": "data-retrieval",
+      "tier": "T1",
+      "version": "1.0.0",
+      "status": "draft",
+      "origin": "legacy-v1",
+      "path": "taskspecs/S17-irab-030-import"
+    },
+    {
+      "task_id": "S18",
+      "title": "五粮液多空综合分析",
+      "family": "equity-research-bull-bear",
+      "tier": "T1",
+      "version": "1.0.0",
+      "status": "draft",
+      "origin": "legacy-v1",
+      "path": "taskspecs/S18-irab-014-import"
     }
   ]
 }

@@ -57,10 +57,10 @@ description: >
 - 抓取失败/付费墙导致某条引用无法核验 → 该条记 `broken`，它属于分母，不要因此把整个字段置空。
 
 **为什么是硬约束**：汇总器 `objective_grounding()` 在 `verified_fraction` 为 `None`（或文件缺失）时会
-**回退为只用 grounding 通过率**，从而把引用权重整段丢掉。后果是一份"答案全对但一个来源都没给"的作品
-拿到满额 D1——恰好与 D1 的本意相反。实测（S11，`d1_objective_weights {citation:0.3, grounding:0.7}`）：
-`verified_fraction = 0.0` → D1 = 0.70；`verified_fraction = null` 或文件缺失 → D1 = 1.00。
-两者相差该维度的整整 30%。写 `0.0`，不要留空。
+**回退为只用 grounding 通过率**。后果是一份"答案全对但一个来源都没给"的作品
+拿到满额 D1——恰好与 D1 的本意相反。实测（S11，`d1_objective_weights` 未覆盖，使用默认 `{citation:0.0, grounding:1.0}`）：
+`verified_fraction = 0.0` → D1 = 1.00（引用分量权重为 0）；`verified_fraction = null` 或文件缺失 → D1 = 1.00。
+两者在该默认下无差异，但当容器覆盖为 citation > 0 时差异仍存在。写 `0.0`，不要留空。
 
 > 注意 `NA 不扣分` 原则在此不适用：它针对的是**基准真值缺失/网络故障**导致某个检查点不可核验，
 > 而"作品自己没给任何来源"是作品的缺陷，不是核验通道的缺陷。

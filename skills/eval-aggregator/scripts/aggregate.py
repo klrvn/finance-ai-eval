@@ -14,6 +14,11 @@ A --bundle dir holds: det_results.json, [citation_audit.json], judge_1.json, jud
 """
 import argparse, json, os, sys
 
+# Engine version, stamped into every scorecard/report so an archived artifact self-identifies
+# which scoring rule produced it. 3.0 = two-layer combination switched from subtractive to the
+# arithmetic mean of the two layers (see combine_layers below and rubrics/constitution.md §计分).
+AGGREGATOR_VERSION = "3.0"
+
 DIMS = ["D1", "D2", "D3", "D4", "D5", "D6"]
 
 DIM_NAMES = {
@@ -47,6 +52,63 @@ def lvl_label(lvl):
     if lvl is None:
         return "NA"
     return LEVEL_LABELS.get(min(4, max(0, int(lvl))), "?")
+
+
+def layer2_coefficient(l2_points):
+    """第二层扣分系数 = max(0, (4 - 扣分点) / 4)，落在 [0, 1]。
+
+    `l2_points` is the two judges' averaged deduction total, in points off 4. It is derived
+    from levels already clamped to [0, 4] by effective_levels(), so the clamp here is only a
+    guard against a caller passing raw ledger sums."""
+    return max(0.0, min(1.0, (4.0 - l2_points) / 4.0))
+
+
+def combine_layers(l1_frac, l2_points):
+    """维度分数 = 第一层实测基线 与 第二层扣分系数 的算术平均。
+
+    Averaged, not subtracted. Subtraction stacked the two penalties and zeroed a dimension far
+    too easily: a work measured at L1=0.57 with 2.25 points of source-quality deductions landed
+    at 0.009, indistinguishable from a work that got nothing right. Averaging is the most
+    forgiving of the combination rules considered — a dimension only reaches 0 when BOTH layers
+    are at 0 — which is the intent.
+
+    Known trade-off, accepted by design: averaging halves the reach of each layer. A work whose
+    Layer-1 measures 0.34 but whose ledger is clean lands at 0.67, and a work with a perfect
+    Layer 1 whose sourcing collapses entirely still floors at 0.50. If either half needs more
+    bite, the lever is a weighted mean, not a change of shape.
+
+    l1_frac is None means the dimension has no GT base at all (D3/D4/D6, or an objective dim
+    whose metric came back missing). Such a dimension is NOT averaged against an implicit 1.0 —
+    that would floor every purely-judged dimension at 0.5 and hand a work with a 4-point D4
+    ledger half the weight. It falls through to the pure deduction coefficient, bit-identical
+    to the pre-3.0 engine.
+
+    `level = 4 * fraction` continues to hold, which the CF cap in cap() relies on."""
+    coef = layer2_coefficient(l2_points)
+    if l1_frac is None:
+        return coef
+    return max(0.0, (l1_frac + coef) / 2.0)
+
+
+def _two_layer_lines(info, od, bullet="- "):
+    """Render the two-layer equation as three short lines.
+
+    One idea per line: the measured base, the deduction coefficient, then the product. The
+    previous single-line form packed all five numbers into one clause, which the readability
+    rule in commands/eval-judge.md explicitly calls out as too dense."""
+    l1f = od.get("layer1_fraction")
+    l2p = od.get("layer2_deduction_points", 0) or 0
+    coef = od.get("layer2_coefficient")
+    if coef is None:
+        coef = layer2_coefficient(l2p)
+    frac_val = info.get("fraction")
+    basis = "GT 检查点通过率" if od.get("scoring_mode") != "deviation" else "GT 检查点偏差分"
+    return [
+        f"{bullet}第一层实测基线 {l1f:g}（{basis}）",
+        f"{bullet}第二层扣分系数 {coef:g}（两位评分官平均扣 {l2p:g} 点，满分 4）",
+        f"{bullet}维度分数 = 两层取平均 = ({l1f:g} + {coef:g}) / 2 = "
+        f"{frac_val if frac_val is not None else '-'}",
+    ]
 
 
 def effective_levels(judge, sink=None):
@@ -148,17 +210,17 @@ def objective_grounding(det, cit, has_policy, taskspec=None, schema=None):
     grounding_deviation_fraction over the binary grounding_pass_fraction.
 
     taskspec may carry:
-      - d1_objective_weights: {citation: x, grounding: y} overriding default 0.6/0.4
+      - d1_objective_weights: {citation: x, grounding: y} overriding default 0.0/1.0
       - grounding_group_weights: {prefix: {subfield: weight}} to compute a weighted
         grounding pass fraction (instead of the grader's equal-weight gpf)
     """
-    cw = 0.6; gw = 0.4
+    cw = 0.0; gw = 1.0
     if taskspec and isinstance(taskspec.get("d1_objective_weights"), dict):
         d = taskspec["d1_objective_weights"]
         try:
-            cw = float(d.get("citation", 0.6)); gw = float(d.get("grounding", 0.4))
+            cw = float(d.get("citation", 0.0)); gw = float(d.get("grounding", 1.0))
         except (TypeError, ValueError):
-            cw, gw = 0.6, 0.4
+            cw, gw = 0.0, 1.0
     ggw = (taskspec or {}).get("grounding_group_weights") if isinstance(taskspec, dict) else None
     schema_obj = schema or (taskspec or {}).get("checkpoint_schema") or {}
     # Deviation mode: use continuous fractions if available
@@ -222,7 +284,11 @@ def build_dim_summary(d, dims, det, cit, cf_applied_list):
     if info.get("needs_review"):
         parts.append("⚠ 两位评分官分歧超过一级，需人工复核")
 
-    if src == "objective" and d == "D1":
+    # "objective" is the legacy source tag; the engine has emitted "layer1+layer2" since the
+    # two-layer model landed. Accept both so this console summary does not silently go blank.
+    is_measured = src in ("objective", "layer1+layer2")
+
+    if is_measured and d == "D1":
         od = info.get("objective_detail", {})
         if det.get("scoring_mode") == "deviation":
             parts.append(f"客观依据：偏差评分模式 grounding_deviation={od.get('grounding_objective', '-')}, "
@@ -234,7 +300,9 @@ def build_dim_summary(d, dims, det, cit, cf_applied_list):
         failed = od.get("failed_checkpoints")
         if failed:
             parts.append(f"扣分来源（未通过检查点）：{', '.join(failed)}")
-    elif src == "objective" and d == "D2":
+        if src == "layer1+layer2" and od.get("layer1_fraction") is not None:
+            parts += _two_layer_lines(info, od, bullet="")
+    elif is_measured and d == "D2":
         od = info.get("objective_detail", {})
         if det.get("scoring_mode") == "deviation":
             basis_val = od.get("methodology_deviation_fraction", od.get('methodology_pass_fraction'))
@@ -246,6 +314,8 @@ def build_dim_summary(d, dims, det, cit, cf_applied_list):
         failed = od.get("failed_checkpoints")
         if failed:
             parts.append(f"扣分来源（未通过检查点）：{', '.join(failed)}")
+        if src == "layer1+layer2" and od.get("layer1_fraction") is not None:
+            parts += _two_layer_lines(info, od, bullet="")
     elif "judge" in src:
         j1 = info.get("judge_1", {})
         j2 = info.get("judge_2", {})
@@ -324,9 +394,11 @@ def score_work(bundle, taskspec, out):
         # Layer 2 (扣分锚点, compulsory): the two judges' non-measurable deductions for this dim,
         # as points off 4, averaged. Derived from effective levels so both ledger and legacy
         # judge files work. Layer 1 (optional GT base): the measured fraction for objective dims,
-        # None otherwise. Combine subtractively: dim_fraction = max(0, L1_frac - L2_points/4),
-        # where L1_frac defaults to 1.0 (full base) for non-objective dims -> pure deduction,
-        # exactly today's behavior.
+        # None otherwise. Combine multiplicatively via combine_layers():
+        #     dim_fraction = mean(L1_frac, max(0, (4 - L2_points)/4))   when a L1 base exists
+        #     dim_fraction = max(0, (4 - L2_points)/4)                  when it does not
+        # The three branches below therefore differ only in their `source` label and in whether a
+        # Layer-1 base exists — the arithmetic is one function, not three copies.
         both_j = (d in l1) and (d in l2)
         if both_j:
             l2_points = ((4.0 - l1[d]) + (4.0 - l2[d])) / 2.0
@@ -348,6 +420,7 @@ def score_work(bundle, taskspec, out):
                     "failed_checkpoints": failed_grounding,
                     "layer1_fraction": round(l1_frac, 4) if l1_frac is not None else None,
                     "layer2_deduction_points": round(l2_points, 3),
+                    "layer2_coefficient": round(layer2_coefficient(l2_points), 4),
                 }
             elif d == "D2":
                 # D2 is methodology: prefer methodology-tagged checkpoints, else fall back to overall.
@@ -361,28 +434,29 @@ def score_work(bundle, taskspec, out):
                     "failed_checkpoints": failed_methodology if meth_frac is not None else failed_all,
                     "layer1_fraction": round(l1_frac, 4) if l1_frac is not None else None,
                     "layer2_deduction_points": round(l2_points, 3),
+                    "layer2_coefficient": round(layer2_coefficient(l2_points), 4),
                 }
 
         if d in objective and l1_frac is not None:
-            # Layer 1 (measured base) minus Layer 2 (non-measurable 扣分锚点).
-            frac = max(0.0, l1_frac - l2_points / 4.0)
-            lvl = round(4.0 * frac, 2)
+            # Layer 1 (measured base) scaled by Layer 2 (non-measurable 扣分锚点).
+            frac = combine_layers(l1_frac, l2_points)
             entry["source"] = "layer1+layer2"
             entry["needs_review"] = judge_divergence
         elif d in objective and both_j:
             # Objective metric unavailable -> fall back to the judges' Layer-2 ledger alone.
-            lvl = (l1[d] + l2[d]) / 2.0
-            frac = max(0.0, lvl / 4.0)
+            frac = combine_layers(None, l2_points)
             entry["source"] = "judge_mean_fallback"
             entry["needs_review"] = judge_divergence
         elif both_j:
             # Non-objective dim: Layer 2 only (L1_frac implicitly 1.0).
-            lvl = (l1[d] + l2[d]) / 2.0
-            frac = max(0.0, lvl / 4.0)
+            frac = combine_layers(None, l2_points)
             entry["source"] = "judge_mean"
             entry["needs_review"] = judge_divergence
         else:
             entry["source"] = "judge_missing"
+
+        if frac is not None:
+            lvl = round(4.0 * frac, 2)
 
         entry["level"] = lvl
         entry["fraction"] = round(frac, 4) if frac is not None else None
@@ -476,6 +550,7 @@ def score_work(bundle, taskspec, out):
     card = {
         "work_label": det.get("work_label") or os.path.basename(bundle),
         "task_id": taskspec.get("task_id") or det.get("task_id"),
+        "aggregator_version": AGGREGATOR_VERSION,
         "score": round(total, 2),
         "scored_weight": scored_weight,
         "score_normalized": score_normalized,
@@ -527,6 +602,15 @@ def _load_work_excerpts(cards):
     return excerpts
 
 
+def _dim_weight(cards, d):
+    """Return the configured weight for dimension d (same across all works), or 0 if unscored."""
+    for c in cards:
+        w = (c.get("dimensions") or {}).get(d, {}).get("weight")
+        if w is not None:
+            return w
+    return 0
+
+
 def report(cards_paths, out):
     """Unified report: identical format for 1..N works.
     Sections: score & ranking table -> per-dim overview -> detailed D1-D6 grading for every
@@ -535,8 +619,13 @@ def report(cards_paths, out):
     cards.sort(key=lambda c: c.get("score", 0), reverse=True)
     lines = ["# 评测报告", ""]
     task = cards[0].get("task_id", "?")
+    engine_v = next((c.get("aggregator_version") for c in cards if c.get("aggregator_version")), None)
     lines.append(f"任务：**{task}** · {len(cards)} 份作品 · 扣分制：满分起评，仅对明确标记的缺陷扣分 · "
-                 f"基于同一套量规与基准真值绝对评分\n")
+                 f"基于同一套量规与基准真值绝对评分")
+    lines.append("")
+    lines.append(f"计分引擎：aggregator {engine_v or '未标注（3.0 之前）'}"
+                 f"（维度分数 = 第一层实测基线 与 第二层扣分系数 取平均）")
+    lines.append("")
 
     # --- 1. Score & ranking table ---
     lines += ["## 总分与排名", ""]
@@ -557,8 +646,11 @@ def report(cards_paths, out):
     sep = "|" + "---|" * (len(cards) + 1)
     lines += ["## 各维度评分总览", "", hdr, sep]
     for d in DIMS:
+        dw = _dim_weight(cards, d)
+        if dw == 0:
+            continue
         name = DIM_NAMES[d]
-        row = [f"{d} {name}"]
+        row = [f"{d} {name}（权重{dw}）"]
         for c in cards:
             info = c.get("dimensions", {}).get(d, {})
             lv = info.get("level")
@@ -571,18 +663,31 @@ def report(cards_paths, out):
             row.append(f"{lvl_str} ({src_tag}){cap}")
         lines.append("| " + " | ".join(row) + " |")
     lines.append("| **总分 /100** | " + " | ".join(f"**{c['score']:g}**" for c in cards) + " |")
-    lines.append("\n`*` = 两位评分官分歧超过一级（需复核）。`(两层)` = 第一层实测基线 − 第二层扣分锚点，"
-                 "`(盲评)` = 纯第二层扣分账本均值（无 GT 基线），`(盲评(回退))` = 客观指标缺失时退回盲评。\n")
+    lines.append("")
+    lines.append("表内标记的含义：")
+    lines.append("- `*` = 两位评分官分歧超过一级，需人工复核。")
+    lines.append("- `(两层)` = 第一层实测基线 与 第二层扣分系数 的**算术平均**。")
+    lines.append("- `(盲评)` = 该维度无 GT 基线，分数为纯第二层扣分账本。")
+    lines.append("- `(盲评(回退))` = 该维度本应有客观指标，但指标缺失，退回盲评。")
+    lines.append("")
 
     # --- 3. Detailed grading per dimension per work (deduction ledgers + answer excerpts) ---
     work_excerpts = _load_work_excerpts(cards)
-    lines += ["## 各维度详细评分（D1-D6）",
+    lines += ["## 各维度详细评分",
               "",
               "每个维度从 4 分（满分）起评；下列每一笔扣分都对应一条有证据的缺陷记录。",
-              "每个维度末尾附学生答案原文引用，方便快速定位答案中的对应位置。", ""]
+              "每个维度末尾附学生答案原文引用，方便快速定位答案中的对应位置。",
+              "权重为 0 的维度已折叠为一行（不计入总分）。", ""]
     for d in DIMS:
         name = DIM_NAMES[d]
-        lines.append(f"### {d} — {name}")
+        dw = _dim_weight(cards, d)
+        if dw == 0:
+            lines.append(f"### {d} — {name}（权重 0，不计入总分）")
+            lines.append("")
+            lines.append("_本任务该维度权重为 0，不计分。_")
+            lines.append("")
+            continue
+        lines.append(f"### {d} — {name}（权重{dw}）")
         lines.append(f"_{DIM_DESC[d]}_")
         lines.append("")
         for c in cards:
@@ -627,11 +732,7 @@ def report(cards_paths, out):
                 elif info.get("source") in ("objective", "layer1+layer2"):
                     lines.append("- 无扣分来源：可核验检查点全部通过")
                 if info.get("source") == "layer1+layer2" and od.get("layer1_fraction") is not None:
-                    l1f = od.get("layer1_fraction")
-                    l2p = od.get("layer2_deduction_points", 0) or 0
-                    frac_val = info.get("fraction")
-                    lines.append(f"- 两层计分：第一层实测基线 {l1f:g} − 第二层扣分锚点 {l2p/4.0:g}"
-                                 f"（{l2p:g} 点/4）= 维度分数 {frac_val if frac_val is not None else '-'}")
+                    lines += _two_layer_lines(info, od)
 
             for jkey, jname in (("judge_1", "评分官1"), ("judge_2", "评分官2")):
                 j = info.get(jkey, {})

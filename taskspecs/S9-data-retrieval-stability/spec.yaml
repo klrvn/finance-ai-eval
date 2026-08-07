@@ -91,24 +91,25 @@ objective_dims: [D1, D2]
 # 权重合计仍为100：D1:40 + D2:20 + D3:15 + D6:25 = 100
 #
 # v2.3 D1 客观锚定细化：
-#   1) D1 objective fraction 内部权重覆盖默认 0.6/0.4 -> 0.3/0.7
-#      （引用核验占比降到 0.3，grounding 检查点通过率提到 0.7）
+#   1) D1 objective fraction = grounding_pass_fraction（引用核验率不再计入 Layer 1）
+#      （引用核验率不再计入 D1 Layer 1，grounding 检查点通过率占全部权重）
 #   2) grounding 检查点分组加权：Q1-Q4 每题 base_price:0.4 / latest_price:0.4 / answer:0.2
 #      跨组（4 题）等权平均 → grounding_pass_fraction_weighted
 #      示例：Q1 base PASS / latest FAIL / answer FAIL → Q1 加权通过率 = 0.4*1 + 0.4*0 + 0.2*0 = 0.40 = 40%
 #
 # v2.5 删除 Q5（10 年期美债收益率）：本任务由 5 题缩减为 4 题（Q1-Q4，全部为 YTD 收益率）。
 #   D1/D2/D3/D6 权重不变（40/20/15/25，合计仍为 100）；grounding 跨组平均由 5 组变为 4 组；
-#   citation_policy.k 由 5 降为 4（本任务每题一条承重来源，k 跟随题数）；
+#   citation_policy 整体关闭（mode: none）——本任务不做引用核验、不触发联网；
 #   计算器移除 FRED DGS10 通道与 US 收盘截止逻辑。
-d1_objective_weights: {citation: 0.3, grounding: 0.7}
 grounding_group_weights:
   Q1_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
   Q2_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
   Q3_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
   Q4_: {base_price: 0.4, latest_price: 0.4, answer: 0.2}
-citation_policy: {mode: sample, k: 4}
+citation_policy: {mode: none}
+# 引用核验已关闭：D1 Layer 1 只看 grounding 检查点，评测不再为核验引用而联网。
 cf_rules: [CF1, CF4, CF5]
+# CF2（未引用主张）未启用——依赖引用审计，而本任务已关闭引用核验。
 cf_thresholds: {}
 required_inputs:
   - name: groundtruth_snapshot.json

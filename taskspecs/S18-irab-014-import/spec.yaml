@@ -1,0 +1,90 @@
+task_id: S18
+version: 1.0.0
+family: equity-research-bull-bear
+tier: T1
+persona: 消费/白酒行业股票研究员
+
+# prompt_text 由 irab-014 原题面扩写而来 -- 逐字对照见 provenance.json 的
+# prompt_deviation_from_irab。扩写只做口径/时点/单位声明,不改变题面本身要求的交付物。
+prompt_text: |
+  请对五粮液（000858.SZ）做一份多空综合分析：先搜集公司近期的经营与财务数据（如营收、
+  利润、毛利率、预收款/合同负债、动销与渠道库存、批价等关键指标），然后分别梳理看多
+  (bull)和看空(bear)两方的核心逻辑与支撑证据，最后在权衡多空后给出你的综合判断和倾向性
+  结论。
+
+  口径声明要求（请在正文中明确声明并全文保持一致）：
+  - 数据基准时点（as-of）：本任务以截至2026年6月中旬（约2026-06-12）可获得的最新数据为准，
+    包括最新披露的年度报告（2025年年度报告，披露日期2026-04-30）及随后披露的2026年一季度
+    报告，市场/估值数据（股价、市值、PE、PB等）以约2026-06-12前后为准。请在正文中注明各项
+    数据各自的口径时点，不要用明显过时的数据代表当前状态，也不要使用该基准时点之后发生的
+    事件或数据。
+  - 五粮液近期存在收入确认会计政策的调整，可能导致同一报告期出现调整前、调整后两套不同的
+    营收/利润数字。请明确说明你引用的财务数字使用的是哪一套口径，并在全文中保持一致；如需
+    同比对比，请确认对比双方使用的是同一套口径。
+  - 市场上流通的"批价"存在多个来源与口径（如公开挂牌报价 vs 渠道实际成交价），请说明你
+    引用的批价数据来自哪个口径。
+  - "分红率"（占净利润的比例）与"分红金额"是两个不同的概念，请分别说明、不要混用。
+  - 若某个报告期的净利润基数因会计口径调整而明显偏离正常水平，直接使用该期净利润计算的
+    估值倍数（如 PE）可能不能准确反映公司估值水平。请说明你选用的估值指标及选择理由。
+  - 请留意并纳入分析近期（如最近一个季度以内）发生的重大事项。
+
+measurable_outputs:
+  - 关键经营与财务数据汇总（营收、利润、毛利率、预收款/合同负债、动销与渠道库存、批价等），
+    并注明各数据的口径与时点
+  - 看多（bull）逻辑与支撑证据
+  - 看空（bear）逻辑与支撑证据
+  - 权衡多空后的综合判断与倾向性结论（需有明确倾向性，不能骑墙）
+
+# ---------------------------------------------------------------------------
+# 权重理由：
+#   D1=30（与D4并列最高）：事实密度极高(44个外部真值锚点覆盖重述前后/历史对照/分季度/
+#     2026Q1/合同负债/分红/估值/可比公司)，取数准确性是评分的重要区分因子。
+#   D2=20：口径纪律——是否声明重述前后口径、是否混淆分红率与分红金额、是否意识到PE(TTM)
+#     失真——由2个consistency检查点(季度闭合)+2个present声明检查点(D2第一层)承载。
+#   D3=15：多空分析的骨架完整度(bull/bear/综合结论/关键指标汇总)。
+#   D4=30（本容器最看重的判断维度）：多空逻辑本身的深度——是否识别会计口径是本轮营收利润
+#     大幅波动的主因(而非经营塌方)，是否正确解读PE(TTM)失真，是否纳入近期边际变化。
+#   D5=0：多空分析本身即是判断输出，不额外设可操作性维度。
+#   D6=5（宪法下限）：取数是否真的用了工具检索。
+# ---------------------------------------------------------------------------
+rubric_weights: {D1: 30, D2: 20, D3: 15, D4: 30, D5: 0, D6: 5}
+
+objective_dims: [D1, D2]
+objective_scoring_mode: binary
+
+citation_policy: {mode: none}
+# D1 的取数准确性已由 44 个 grounding 检查点直接核验，不额外做引用抽样核验。
+
+cf_rules: [CF1, CF3, CF4, CF5]
+# CF2 不启用：citation_policy=none。
+# CF3 启用：若候选作品只泛泛描述"五粮液经营有起有落"而不给出任何可核验的具体数值
+#   (营收/利润/毛利率等)，D2+D3 应被封顶到最低档——本题的核心交付物就是"数据+逻辑+结论"，
+#   零数据的多空分析不满足题面要求。
+# CF4 启用：本题存在明确的"当前(2026Q1/约2026-06-12) vs 陈旧(重述前口径/更早批价)"时点轴，
+#   用重述前数字或旧批价冒充当前状态是本题明确的失真陷阱。
+cf_thresholds: {}
+
+required_inputs:
+  - name: groundtruth_snapshot.json
+    needed_for: "GT 答案键的可读镜像/可选 override；默认 GT 为计算器内嵌的冻结值"
+    na_policy: "计算器默认使用内嵌答案键，不依赖此文件"
+
+task_validators:
+  - {name: restatement_q4_trap, realized_by: "checkpoint q_revenue_sum_consistency/q_np_sum_consistency（consistency，四季度之和必须等于全年，防止用重述前前三季减重述后全年得出Q4负值）"}
+  - {name: caliber_declared, realized_by: "checkpoint restated_caliber_declared/valuation_metric_choice_declared（present, methodology）"}
+  - {name: no_point_gt_for_ranges, realized_by: "K组4个present检查点（batch_price_caliber_declared等）——gold原文为区间的量不设点值真值"}
+  - {name: bull_bear_structure, realized_by: "checkpoint bull_case_present/bear_case_present/tilted_conclusion_present（present, 喂D3）"}
+
+engine_requirements:
+  calculator: irab_014_anchors
+  gt_kind: calculator
+  gt_version: "1.0"
+  checkpoint_types: [number, pct, ratio, present, consistency]
+  tolerance_policy: >
+    重述前后前三季度、FY2025全年、历史对照(FY2024/FY2023)、分季度数据：tol 1-1.5% 相对，
+    对齐gold facts自己标注的容差。毛利率类：tol 0.3pp绝对。估值类(PE/PB/市值/股价)：
+    tol 5-8%相对，反映市场数据的浮动性。可比公司数据：tol 2-8%不等，参照gold facts
+    对应容差。季度闭合consistency：tol 1-2%相对，只核验候选作品自己的算术。
+  data_fetch_mode: "frozen_snapshot（网络无关，计算器内嵌冻结值，数据基准约2026-06-12，财务数据基准为2026-04-30披露的FY2025年报）"
+  min_grader_version: "1.1"
+  min_aggregator_version: "2.3"

@@ -32,8 +32,13 @@ task means editing the framework. Target: a three-layer architecture where
 ## 1. Layer 1 — Rubrics (the constitution)
 
 **Content** (today's `rubric_and_cf.md`, promoted): D1-6 definitions (D1 includes data-source tier grading — 第一级一手/官方 > 第二级权威机构二次分析 > 第三级非金融机构文章/新闻 — directly affecting D1 score; D6 covers only tool-execution behavior, not source tiers); 扣分制 severity scale
-(minor −0.5 / major −1 / severe −2, level = max(0, 4−Σ)); scoring math (continuous fraction ×
-weight; NA excluded from denominator; scored_weight disclosure); CF1-5 definitions, evidence
+(minor −0.5 / major −1 / severe −2, level = max(0, 4−Σ)); scoring math — the two-layer
+combination `fraction = mean(layer-1 measured base, layer-2 deduction coefficient)`, where the
+coefficient is `max(0, (4 − Σpoints)/4)`, and dimensions outside `objective_dims` have no
+layer-1 base and so score the coefficient alone (averaged since aggregator 3.0; previously
+subtractive, which stacked the two penalties and zeroed dimensions far too easily — the accepted
+cost of averaging is that each layer's reach is halved) — plus continuous fraction ×
+weight, NA excluded from denominator, scored_weight disclosure; CF1-5 definitions, evidence
 requirements, cap effects; blind/absolute/isolation principles; D6 deduction anchors
 (计算无执行轨迹, 工具链覆盖不完整, 调用失败未处理, 完全无工具使用证据).
 
@@ -184,6 +189,11 @@ circularity where a spec could be fitted to (or against) a particular submission
 
 `tier` states how verifiable the task is; lint enforces internal coherence so a container
 can't claim determinism it doesn't have:
+
+> **Superseded twice — this is the design draft, not the live rule.** Migration self-check row 10
+> (below) reconciled it against S1-S8; then on 2026-08-06 the T2 `objective_dims` count limit was
+> dropped entirely. Live rule: `spec_lint.py` § tier coherence, mirrored in `taskspecs/README.md`
+> § tier and constitution §5.
 
 - **T1 确定性**: `gt_recipe` must be executable (a/b) and cover ≥60% of weight-bearing
   checkpoints; `objective_dims ⊇ {D1, D2}` (or D2 alone if `citation_policy: none`).

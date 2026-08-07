@@ -93,8 +93,8 @@ ANSWER_KEY = {
     "Q3_3_strait_reopen_announced_date": 20260417,
     # 第4点 美伊伊斯兰堡会谈的两日日期 —— 无容错, 两日都对才给分 (vector, 无部分分)
     "Q3_4_islamabad_talks_window": {
-        "talks_start": 20260611,
-        "talks_end": 20260612,
+        "talks_start": 20260411,
+        "talks_end": 20260412,
     },
     # 第5点 美伊两国总统签署谅解备忘录 —— 6月17日 / 6月18日 均可 -> 半整数中点 + tol 0.5
     "Q3_5_mou_signed_date": 20260617.5,

@@ -137,10 +137,63 @@ def lint_container(root, entry, r):
         if script and not os.path.exists(os.path.join(root, script)):
             r.err(f"calculator script not found: {script}")
 
+    # --- gt_variants: multi-convention ground-truth routing ---
+    # A checkpoint whose quantity has several *legitimate* conventions may route to one GT key per
+    # convention (see resolve_gt_variants in grade_checkpoints.py). Misconfiguration here is silent
+    # at runtime -- a typo'd GT key just yields NA, which reads as "un-verifiable" rather than
+    # "broken container" -- so validate the wiring statically.
+    produced = set((gt or {}).get("calculator", {}).get("produces") or [])
+    sidecar_outputs = set()
+    if gt_kind == "calculator":
+        sc = (gt or {}).get("calculator", {}).get("sidecar")
+        if sc and os.path.exists(os.path.join(root, sc)):
+            try:
+                sidecar_outputs = set(loady(os.path.join(root, sc)).get("outputs") or [])
+            except Exception as e:
+                r.warn(f"could not read calculator sidecar outputs: {e}")
+    known_gt_keys = produced | sidecar_outputs
+
+    for fname, meta in fields.items():
+        if not isinstance(meta, dict) or "gt_variants" not in meta:
+            continue
+        gv = meta["gt_variants"]
+        if not isinstance(gv, dict):
+            r.err(f"checkpoint {fname}: gt_variants must be a mapping, got {type(gv).__name__}"); continue
+        if meta.get("type") not in NUMERIC_SCALAR:
+            r.err(f"checkpoint {fname}: gt_variants is only supported on numeric scalar types "
+                  f"{sorted(NUMERIC_SCALAR)}, got {meta.get('type')!r}")
+        routing = gv.get("field")
+        if not routing:
+            r.err(f"checkpoint {fname}: gt_variants missing 'field' (the routing checkpoint)")
+        elif routing not in fields:
+            r.err(f"checkpoint {fname}: gt_variants.field {routing!r} is not a checkpoint in this schema")
+        elif fields[routing].get("grounding") or fields[routing].get("methodology"):
+            # The routing field decides *what* to measure against; scoring it too would make one
+            # disclosure gap cost twice (once here, once via the judge anchor for the same gap).
+            r.warn(f"checkpoint {fname}: gt_variants routing field {routing!r} is itself tagged "
+                   f"grounding/methodology -- the convention choice would be scored twice")
+        vmap = gv.get("map")
+        if not isinstance(vmap, dict) or not vmap:
+            r.err(f"checkpoint {fname}: gt_variants.map must be a non-empty {{variant: gt_key}} mapping")
+            continue
+        if len(vmap) < 2:
+            r.warn(f"checkpoint {fname}: gt_variants.map has a single variant -- routing is pointless")
+        for variant, gt_key in vmap.items():
+            if not isinstance(gt_key, str) or not gt_key:
+                r.err(f"checkpoint {fname}: gt_variants.map[{variant!r}] must be a ground-truth key string")
+            elif known_gt_keys and gt_key not in known_gt_keys:
+                r.err(f"checkpoint {fname}: gt_variants.map[{variant!r}] -> {gt_key!r} is not produced "
+                      f"by the calculator (would silently grade as NA)")
+
     # --- cf thresholds within constitution bands ---
     thr = spec.get("cf_thresholds", {}) or {}
     if "CF2_uncited_ratio" in thr and not (CF2_BAND[0] <= thr["CF2_uncited_ratio"] <= CF2_BAND[1]):
         r.err(f"CF2_uncited_ratio {thr['CF2_uncited_ratio']} outside band {CF2_BAND}")
+
+    # --- CF2 needs an active citation policy (it reads uncited_claim_ratio from the audit) ---
+    if "CF2" in (spec.get("cf_rules") or []) and cite_mode == "none":
+        r.err("cf_rules includes CF2 but citation_policy.mode == none -> CF2 can never fire "
+              "(no citation audit is produced)")
 
     # --- engine_requirements type coverage ---
     er = spec.get("engine_requirements", {}) or {}
@@ -150,7 +203,7 @@ def lint_container(root, entry, r):
     if missing_decl:
         r.warn(f"engine_requirements.checkpoint_types missing used types {sorted(missing_decl)}")
 
-    # --- d1_objective_weights (optional override of default 0.6/0.4) ---
+    # --- d1_objective_weights (optional override of default 0.0/1.0) ---
     d1w = spec.get("d1_objective_weights")
     if d1w is not None:
         if not isinstance(d1w, dict) or set(d1w.keys()) != {"citation", "grounding"}:
@@ -251,8 +304,11 @@ def lint_container(root, entry, r):
         if gt_kind != "calculator":
             r.err(f"T1 requires an executable calculator, gt kind is {gt_kind!r}")
     elif tier == "T2":
-        if len(obj) > 1:
-            r.err(f"T2 requires <=1 objective dim, got {obj}")
+        # No cap on objective_dims: a T2 container may anchor D1, D2, both, or neither.
+        # Tier states truth-path strength (T1 demands an executable calculator), not how many
+        # dimensions are anchored — the two are independent axes, and a Layer-1 fraction from an
+        # internal-consistency checkpoint is as well-formed as one from a calculator. The global
+        # `objective_dims ⊆ {D1,D2}` rule still bounds the set.
         if not (gt_kind == "calculator" or has_internal_cp or has_sample):
             r.err("T2 requires a verifiability path (calculator OR internal-consistency OR sample_verify)")
     elif tier == "T3":

@@ -93,10 +93,12 @@
 全 tier：权重整数合计 100；`objective_dims ⊆ {D1,D2}`；D6 权重 ≥ 5；每个非内部一致性的数值型检查点都要有真值路径（禁止伪确定性）。
 
 - **T1｜确定性**：`objective_dims == [D1,D2]`；`gt_recipe.kind == calculator` 且为数值计算器；承重数值检查点均有真值。（S2/S3/S4）
-- **T2｜半确定性**：`len(objective_dims) ≤ 1`；至少一条可核验路径——可执行计算器 **或** ≥1 个 `reconcile/consistency/monotonic` 检查点 **或** ≥1 个 `sample_verify`。（S1/S5/S7）
+- **T2｜半确定性**：`objective_dims` **不限个数**（空集 / D1 / D2 / 两者兼有均可）；至少一条可核验路径——可执行计算器 **或** ≥1 个 `reconcile/consistency/monotonic` 检查点 **或** ≥1 个 `sample_verify`。（S1/S5/S7）
 - **T3｜研判型**：`len(objective_dims) ≤ 1`；非客观权重（`100 − Σ objective_dims 权重`）≥ 40，研判/引用主导。（S6/S8）
 
 > 这三条 tier 规则是从 S1-S8 反推、并保证 8 个参考容器全部通过的。设计初稿更严的版本（如「T2 必须有内部一致性检查点」「T3 必须有引用」「T3 D4+D5≥40」）与 S5/S7/S6/S8 冲突，已在迁移自检中放宽（见 `docs/three-layer-architecture.md` §7）。
+
+> **2026-08-06 修订：T2 的 `objective_dims` 个数上限已取消。** 原 `≤ 1` 是从 8 个 legacy 容器反推出的经验拟合，并非结构性约束：`aggregate.py` 计算第一层比例时只看检查点结果与 `objective_dims` 集合，从不读 `gt_recipe.kind`——因此由内部一致性检查点支撑的 D1/D2 第一层比例，与由计算器支撑的同样成立。个数与真值路径强度是两个独立的轴，tier 只刻画后者（T1 仍强制 `kind == calculator`）。T3 的 `≤ 1` 未改动，其约束力实际来自「非客观权重 ≥ 40」。
 
 ## 类型表（checkpoint_schema 只能用这些类型）
 

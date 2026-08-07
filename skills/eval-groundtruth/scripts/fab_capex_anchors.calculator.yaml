@@ -1,0 +1,54 @@
+calculator_id: fab_capex_anchors
+script: fab_capex_anchors.py
+version: "1.0"
+family: capex-allocation
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+inputs:
+  groundtruth_snapshot.json: "(optional) override answer key JSON (flat {checkpoint: value}, or wrapped as {values:{...}}); default GT is the embedded frozen anchor key"
+outputs:
+  # 9 家国产设备厂商 2025 年营业收入（亿元）—— 相对弹性的分母基数
+  - naura_revenue_2025
+  - amec_revenue_2025
+  - acmr_revenue_2025
+  - piotech_revenue_2025
+  - mattson_revenue_2025
+  - hwatsing_revenue_2025
+  - jingce_revenue_2025
+  - skyverse_revenue_2025
+  - kingsemi_revenue_2025
+  # 招股书与股权锚点
+  - cxmt_planned_raise
+  - cxmt_equip_capex_prospectus
+  - naura_kingsemi_stake
+  # 时效性探针
+  - ymtc_phase3_localization
+side_outputs:
+  - cxmt_use_of_proceeds_total
+needs_market_data: false
+self_check: >
+  emits self_check{passed}; verifies all 13 checkpoint values are present / numeric / finite,
+  all 9 vendor revenues are strictly positive, NAURA holds the largest vendor revenue, both
+  ratio fields sit on the fraction scale (0,1), the use-of-proceeds total is COMPUTED from its
+  three funded projects with the planned raise strictly below it, the prospectus equipment line
+  sits inside that envelope, and — the design-premise guard — the freshness probe's pass band
+  starts strictly above the stale industry-average ceiling (0.30) so the checkpoint cannot
+  silently degrade into a freebie if the tolerance is ever widened.
+encoding:
+  amounts: "亿元 (CNY), 2 decimals"
+  ratios: "fraction (0.1787 == 17.87%), 4 decimals — matches the extractor's validators.py; gt_recipe must NOT declare percent_fields"
+  threshold_facts: "阈值型事实（长存三期国产设备占比「首次超过 50%」）以带中值 0.55 + 容差 0.15 编码，通过带 [0.40, 0.70]"
+data_cutoff: "2026-06-13"
+scope_note: >
+  真值只覆盖**输入锚点**，不覆盖任何模型输出。单万片设备投资单价的两套口径相差 2.8 倍，
+  环节占比 / 国产化率 / 公司份额 gold 全部以区间给出且明言公司份额未公开披露、须作透明假设、
+  不得编造点值。因此输出层一律由容器的内部一致性检查点（reconcile / consistency / sum_to）
+  承载。给假设驱动的输出设点值 GT 会使评分方向反转——惩罚诚实标注区间的作品，放行伪精确答案。
+migration_note: >
+  v1.0 (2026-08-06): initial snapshot-to-GT calculator for S13, adapted from IRAB irab-012.
+  Mirrors S10/S11/S12's frozen-answer-key pattern (network-free, self-checked, --snapshot
+  overridable). Unlike S12 — where the frozen key covers the entire input layer of the
+  computation — S13's key covers only *validation anchors*, because S13's actual model inputs
+  are ranges with no unique value. That difference is why S13 is tier T2 while S12 is T1.

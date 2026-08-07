@@ -1,5 +1,5 @@
 task_id: S11
-version: 1.1.0
+version: 1.1.1
 family: news-data-retrieval
 tier: T1
 persona: 研究员
@@ -65,9 +65,8 @@ objective_dims: [D1, D2]
 #     是独立失败模式——答案对但口径未声明。
 #   D3=8：完整性已被 D1 的 12 个分点大幅重复计量，仅保留对"交付结构性缺失"的独立惩罚。
 #   D4=0 / D5=0：取消评分，与 S10 一致。
-# D1 客观 fraction 内部权重: citation 0.3 / grounding 0.7（与 S9/S10 一致）。
+# D1 客观 fraction = grounding_pass_fraction（引用核验率不再计入 Layer 1）。
 # D1 第二层：本任务【取消】信息来源含金量扣分锚点——见 judge_notes.md D1 段。
-d1_objective_weights: {citation: 0.3, grounding: 0.7}
 # 12 分制的精确还原：13 个 grounding 检查点被重新组装为 12 个等权分点。
 #   每个组恰好对应题库判分规则里的"一分"，组间等权（汇总器对各组通过率取等权平均）。
 #   唯一的两条腿复合分点是 Q1_2（题库唯一带部分分的题）：

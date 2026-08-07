@@ -1,0 +1,53 @@
+calculator_id: irab_021_anchors
+script: irab_021_anchors.py
+version: "1.0"
+family: equity-fundamentals
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+outputs:
+  - revenue_2025
+  - net_profit_2025
+  - total_assets_2025_eop
+  - equity_2025_eop
+  - revenue_2024
+  - net_profit_2024
+  - total_assets_2024_eop
+  - equity_2024_eop
+  - total_assets_2023_eop
+  - equity_2023_eop
+  - disclosed_roae_2025
+  - disclosed_roae_2024
+  - disclosed_roaa_2025
+  - disclosed_roaa_2024
+  - net_margin_2025
+  - net_margin_2024
+  - turnover_2025_eop
+  - turnover_2025_avg
+  - turnover_2024_eop
+  - turnover_2024_avg
+  - leverage_2025_eop
+  - leverage_2025_avg
+  - leverage_2024_eop
+  - leverage_2024_avg
+  - product_2025_eop
+  - product_2025_avg
+  - product_2024_eop
+  - product_2024_avg
+side_outputs: []
+needs_market_data: false
+self_check: >
+  15 项: 期末/平均口径下三因子乘积严格等于净利润/(对应)权益(机器精度恒等式) x2年 x2口径 = 4 项；
+  逐项与 gold 原文四舍五入参考值交叉校验(±0.06pp / ±0.02倍) = 14 项；ROAA 可由净利润/平均总资产
+  精确复算并与披露值一致 = 1 项。
+scale: >
+  原始财务数据(营业收入/净利润/总资产/权益)以亿元为单位；净利率/周转率/ROAE/ROAA/三因子乘积
+  以 fraction 输出(44.49% -> 0.4449)；权益乘数为纯比率(不做百分比刻度)。gt_recipe.yaml
+  不得声明 percent_fields。
+out_of_scope: >
+  年报披露的加权平均ROE(ROAE)与本计算器的三因子乘积不是同一个数——ROAE分母剔除了其他权益工具
+  (优先股/永续债)并按时间加权，分子扣除对应股息/利息，属另一套口径，不在本计算器的"三因子闭环"
+  职责范围内，只作为独立的 D1 grounding 锚点(disclosed_roae_*)呈现，供候选作品对照说明差异，
+  不设"乘积应等于ROAE"这类检查点(那本身是本题要考察的口径混淆陷阱)。
+data_cutoff: "2026-03-27（招商银行 2025 年年度报告披露日）"

@@ -1,0 +1,78 @@
+task_id: S17
+version: 1.0.0
+family: data-retrieval
+tier: T1
+persona: 宏观/贸易数据分析师
+
+# prompt_text 由 irab-030 原题面扩写而来 -- 逐字对照见 provenance.json 的
+# prompt_deviation_from_irab。扩写只做口径/时点/单位声明,不改变题面本身要求的交付物。
+prompt_text: |
+  请查询马来西亚 2026 年 1 月至 2 月累计对以下 8 个贸易伙伴的双边贸易数据：中国、印度、
+  新加坡、日本、泰国、美国、越南、韩国。请回答：在这 8 个贸易伙伴中，马来西亚贸易差额
+  最大的是哪一个？
+
+  口径声明要求（请在正文中明确声明并全文保持一致）：
+  - 数据基准时点（as-of）：本任务以马来西亚统计局(DOSM) 2026年2月贸易统计公报（发布日期
+    2026-03-19）披露的数据为准；请不要使用该公报发布之后更新/修订的数据，也不要用更早或
+    更晚的统计月份替代本任务指定的统计区间。
+  - 请使用马来西亚官方贸易统计（如 DOSM 对外贸易统计公报）的出口（FOB）、进口（CIF）、
+    贸易差额数据，币种为马来西亚林吉特（RM），并注明数据来源与发布时点。
+  - 请使用 2026 年 1 月至 2 月的累计数（而非单月数据）。
+  - "贸易差额最大"的含义请自行声明并保持一致：8 个贸易伙伴中有顺差也有逆差，"差额最大"
+    可以理解为"顺差金额最大"，也可以理解为"不论顺差逆差、差额绝对值最大"——请明确说明
+    你采用的是哪一种理解，并按你声明的定义给出结论。
+  - 请对每个贸易伙伴分别列出出口额、进口额、贸易差额（并标明顺差/逆差方向）。
+
+measurable_outputs:
+  - 8 个贸易伙伴各自的出口额、进口额、贸易差额（RM 百万，注明顺差或逆差）
+  - 候选作品对"贸易差额最大"采用的定义（顺差最大 / 绝对值最大），并说明理由
+  - 按声明的定义得出的结论：贸易差额最大的伙伴是哪一个
+
+# ---------------------------------------------------------------------------
+# 权重理由：
+#   D1=45（本容器主维度）：本题本质是取数题——8国+全国合计共27个数据点是否取得准确，
+#     是评分的主要区分因子。
+#   D2=15：出口-进口是否能自洽算出差额（9个consistency检查点），以及是否声明"最大"定义。
+#   D3=15：8国是否都覆盖、是否有明确结论。
+#   D4=0：本题不涉及分析深度，属纯数据查询与口径判断。
+#   D5=0：不涉及投资建议。
+#   D6=25：数据检索是否真的用了工具（该类任务D6权重高是data-retrieval家族惯例，见S9）。
+# ---------------------------------------------------------------------------
+rubric_weights: {D1: 45, D2: 15, D3: 15, D4: 0, D5: 0, D6: 25}
+
+objective_dims: [D1, D2]
+objective_scoring_mode: binary
+
+citation_policy: {mode: none}
+# D1 的取数准确性已由 27 个 grounding 检查点直接核验，不额外做引用抽样核验。
+
+cf_rules: [CF1, CF5]
+# CF2 不启用：citation_policy=none。
+# CF3 不启用：本题不是"描述分析但未产出计算结果"这类失败模式的典型场景——候选作品要么
+#   报数据要么不报，报不全的直接在检查点/D3体现。
+# CF4 不启用：本题是固定历史区间(2026年1-2月)的数据查询，非"当前vs陈旧"场景。
+cf_thresholds: {}
+
+required_inputs:
+  - name: groundtruth_snapshot.json
+    needed_for: "GT 答案键的可读镜像/可选 override；默认 GT 为计算器内嵌的冻结值"
+    na_policy: "计算器默认使用内嵌答案键，不依赖此文件"
+
+task_validators:
+  - {name: balance_arithmetic, realized_by: "checkpoint balance_*_consistency（consistency，候选作品自己的出口-进口是否等于自报差额，9项）"}
+  - {name: definition_declared, realized_by: "checkpoint balance_definition_declared（present，是否声明'最大'的定义——本题核心口径分歧点）"}
+  - {name: eight_partners_coverage, realized_by: "checkpoint all_eight_partners_present（count_min, target=8）"}
+
+engine_requirements:
+  calculator: irab_030_anchors
+  gt_kind: calculator
+  gt_version: "1.0"
+  checkpoint_types: [number, present, count_min, consistency]
+  tolerance_policy: >
+    出口/进口/差额（RM百万）：美国/中国/全国合计 tol 1% 相对；新加坡 tol 1.5%；其余5国
+    tol 2% 相对——完全对齐 gold facts 自己标注的容差。balance_*_consistency（候选作品自己
+    的出口-进口与自报差额的闭合）tol 30 RM百万绝对（8国）/ 100 RM百万绝对（全国合计，
+    数值量级更大）——只核验候选作品自己的算术，不掺入取数误差。
+  data_fetch_mode: "frozen_snapshot（网络无关，计算器内嵌冻结值，数据基准为 DOSM 2026年2月贸易公报，2026-03-19 发布）"
+  min_grader_version: "1.1"
+  min_aggregator_version: "2.3"

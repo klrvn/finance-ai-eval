@@ -1,0 +1,88 @@
+calculator_id: cb_index_drawdown
+script: cb_index_drawdown.py
+version: "1.0"
+family: market-drawdown-retrospective
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+inputs:
+  groundtruth_snapshot.json: "(optional) override answer key JSON ({rounds: {R1:{...},...}, credit_events: [...]}); default GT is the embedded frozen values from IRAB irab-011 gold facts"
+outputs:
+  # R1 (2022-01-04 -> 2022-04-26)
+  - R1_peak_date
+  - R1_peak_price
+  - R1_trough_date
+  - R1_trough_price
+  - R1_max_drawdown_pct
+  - R1_benchmark_return_pct
+  - R1_premium_before_pct
+  - R1_premium_after_pct
+  - R1_recov_from_high
+  - R1_recov_from_low
+  # R2 (2022-08-17 -> 2022-12-23, W-shape two legs)
+  - R2_peak_date
+  - R2_peak_price
+  - R2_leg1_low_date
+  - R2_leg1_low_price
+  - R2_rebound_date
+  - R2_rebound_price
+  - R2_trough_date
+  - R2_trough_price
+  - R2_max_drawdown_pct
+  - R2_leg1_benchmark_return_pct
+  - R2_leg2_benchmark_return_pct
+  - R2_premium_before_pct
+  - R2_premium_after_pct
+  - R2_recovery_days_valuation
+  # R3 (2023-08-04 -> 2024-02-05)
+  - R3_peak_date
+  - R3_peak_price
+  - R3_trough_date
+  - R3_trough_price
+  - R3_max_drawdown_pct
+  - R3_benchmark_return_pct
+  - R3_premium_after_pct
+  - R3_recovery_days_valuation
+  - R3_recovery_days_point
+  # R4 (2024-05-20 -> 2024-09-18)
+  - R4_peak_date
+  - R4_peak_price
+  - R4_trough_date
+  - R4_trough_price
+  - R4_max_drawdown_pct
+  - R4_benchmark_return_pct
+  - R4_premium_before_pct
+  - R4_premium_after_pct
+  - R4_recovery_days_point
+  - R4_credit_event_facts
+side_outputs: []
+needs_market_data: false
+self_check: >
+  emits self_check{passed}; 45 项检查(实测): 逐轮价格/日期落在合理区间, 日期时序正确,
+  四轮均已登记的 max_drawdown_pct 与峰谷价格互算一致(容器自身的核心跌幅数字未被算错),
+  跌幅落在四轮共有的 -7%~-13% 区间, 溢价率落在拟合百元口径 10%-30% 区间,
+  R1 两个修复口径变体的相对顺序合理, R3 估值修复快于点位修复,
+  已知市场方向(沪深300 同期涨跌)与转债走势的脱钩/跟随关系符合 gold facts.
+scale: >
+  百分比量(跌幅/溢价率/基准收益率)以 fraction 输出(-12.2% -> -0.122), 与提取器
+  validators.py 的规范化结果同刻度. gt_recipe.yaml **不得**声明 percent_fields ——
+  声明会使 gt_dispatch.apply_percent_canon 再除一次 100.
+  日期以 YYYYMM 整数编码(年*100+月), 与"月份级即可算 present"的容器要求对齐,
+  避免 YYYYMMDD 整数差跨月不等于自然日差的算术陷阱.
+calibers:
+  drawdown_basis: "收盘口径为主(gold facts 明确'本复盘默认日收盘价口径'); 盘中极值为补充信息, 不设为独立 gt_variants 分支"
+  premium_caliber: "仅拟合百元(fitted-to-par)口径设点值真值——四轮中唯一有完整、精确的口径内数值来源。均值/算术平均口径在 gold facts 中数据不全(仅部分轮次有单点数值), 不设点值真值, 由 judge_notes 的口径声明/口径混用锚点承载。"
+out_of_scope: >
+  溢价率收缩幅度(pp)与"点位-溢价率互算"一致性不设独立真值键——它们是候选作品自己已报
+  数值之间的内部自洽关系, 由容器的 reconcile/consistency 检查点在评分时直接对候选作品的
+  已报数值求值(参见 checkpoint_schema.yaml 的 *_premium_compression_pp / *_drawdown_price_consistency)。
+  R3_premium_before_pct 与 R4_recovery_days_valuation 因 gold facts 数据不全/开放区间而不设点值真值
+  (见 provenance.coverage_gaps 与脚本内注释)。
+data_cutoff: "2026-08-07（irab-011 gold facts 冻结快照, 覆盖 2022-2024 三个完整年度, 不随时间变化）"
+design_note: >
+  与 S12/S13 同族的 frozen-snapshot 计算器, 但多一层自检目的: gold 文件本身把
+  "所引每轮高点/低点点位与所报最大跌幅必须能互算"列为最高发的内部矛盾陷阱
+  (data_inconsistency #1), 本计算器的 self_check 把这条规则首先用在自己身上——
+  逐轮重新用峰谷价格算出跌幅, 与手工登记的 max_drawdown_pct 互相校验,
+  防止本容器在冻结前带着算术错误的答案键上线。

@@ -1,0 +1,136 @@
+# S13 检查点模式 —— 存储扩产国产设备受益测算
+#
+# 分四组：
+#   A  D1 第一层（grounding:true）—— 13 个冻结锚点事实，外部真值来自 fab_capex_anchors 快照
+#   B  D2 第一层（methodology:true）—— 13 个级联闭合关系，内部一致性，无需外部真值
+#   C  公式依赖字段（无标签）—— 只为把值取出来喂给 B 组公式；无 GT 键故判 NA，不进分母
+#   D  交付物与覆盖度（无标签）—— 喂 D3 盲评与报告审计痕迹
+#
+# C/D 组一律不打 grounding/methodology 标签：避免用「报了就通过」的容易题稀释 D1/D2 第一层基线。
+
+fields:
+
+  # ============ A 组：D1 第一层 —— 冻结锚点事实（外部真值） ============
+  # 设备厂商 2025 年营业收入（亿元）——相对弹性的分母基数，题面要求列出。容差 ±2%（gold 自标）。
+  naura_revenue_2025:          {type: number, tol: 0.02, rel: true, grounding: true}   # 北方华创
+  amec_revenue_2025:           {type: number, tol: 0.02, rel: true, grounding: true}   # 中微公司
+  acmr_revenue_2025:           {type: number, tol: 0.02, rel: true, grounding: true}   # 盛美上海
+  piotech_revenue_2025:        {type: number, tol: 0.02, rel: true, grounding: true}   # 拓荆科技
+  mattson_revenue_2025:        {type: number, tol: 0.02, rel: true, grounding: true}   # 屹唐股份
+  hwatsing_revenue_2025:       {type: number, tol: 0.02, rel: true, grounding: true}   # 华海清科
+  jingce_revenue_2025:         {type: number, tol: 0.02, rel: true, grounding: true}   # 精测电子
+  skyverse_revenue_2025:       {type: number, tol: 0.02, rel: true, grounding: true}   # 中科飞测
+  kingsemi_revenue_2025:       {type: number, tol: 0.02, rel: true, grounding: true}   # 芯源微
+  # 万业企业不设检查点：gold 明确标注其 2025 营收未取得可信结构化数据，应留空/标待查而非编造。
+
+  # 招股书与股权锚点（亿元 / 比例）
+  cxmt_planned_raise:          {type: number, tol: 0.02, rel: true, grounding: true}   # 长鑫拟募资
+  cxmt_equip_capex_prospectus: {type: number, tol: 0.02, rel: true, grounding: true}   # 募投设备购置及安装费
+  naura_kingsemi_stake:        {type: number, tol: 0.02, rel: true, grounding: true}   # 北方华创持芯源微比例
+
+  # 时效性探针：长存三期国产设备采购占比。带 [0.40, 0.70] 接受「首次超过 50%」的当期口径，
+  # 把陈旧的「国内晶圆厂平均 15-30%」挡在外面。
+  ymtc_phase3_localization:    {type: ratio, tol: 0.15, grounding: true}
+
+  # ============ B 组：D2 第一层 —— 级联闭合关系（内部一致性） ============
+  # 红线1 之一：各厂环节占比合计须自洽
+  dram_step_weights_sum:
+    {type: sum_to, target: 1.0, tol: 0.005, methodology: true}
+  nand_step_weights_sum:
+    {type: sum_to, target: 1.0, tol: 0.005, methodology: true}
+
+  # 第 1 层级联：单线设备总额 = 单价 × 产能（活公式，逐厂分列）
+  dram_equipment_total:
+    {type: reconcile, formula: "dram_unit_price * dram_wspm", tol: 0.02, rel: true, methodology: true}
+  nand_equipment_total:
+    {type: reconcile, formula: "nand_unit_price * nand_wspm", tol: 0.02, rel: true, methodology: true}
+
+  # 第 2 层级联：环节设备额 = 单线总额 × 该环节占比（以刻蚀为代表环节抽验）
+  dram_etch_amount:
+    {type: reconcile, formula: "dram_equipment_total * dram_etch_weight", tol: 0.02, rel: true, methodology: true}
+  nand_etch_amount:
+    {type: reconcile, formula: "nand_equipment_total * nand_etch_weight", tol: 0.02, rel: true, methodology: true}
+
+  # 第 3 层级联：单厂国产合计 = 各环节国产金额之和
+  dram_domestic_total:
+    {type: reconcile, formula: "dram_step_domestic__sum", tol: 0.02, rel: true, methodology: true}
+  nand_domestic_total:
+    {type: reconcile, formula: "nand_step_domestic__sum", tol: 0.02, rel: true, methodology: true}
+
+  # 红线1 核心：公司层汇总 与 环节层国产合计 必须闭合（偏差 >5% 即分摊逻辑不自洽）
+  company_vs_step_tie_out:
+    type: consistency
+    lhs: "company_increments__sum"
+    rhs: "dram_domestic_total + nand_domestic_total"
+    tol: 0.05
+    rel: true
+    methodology: true
+
+  # 红线2：光刻国产化率不足百分之一，其国产受益须落在近零量级。
+  # rel:true tol:1.5 使通过带随作品自己的设备总额缩放——给零通过，给到光刻设备额 2.5% 以上则失败。
+  litho_domestic_near_zero:
+    type: consistency
+    lhs: "dram_litho_domestic + nand_litho_domestic"
+    rhs: "(dram_equipment_total * dram_litho_weight + nand_equipment_total * nand_litho_weight) * 0.01"
+    tol: 1.5
+    rel: true
+    methodology: true
+
+  # 整线国产受益比例须与「目标厂×目标平台×当期」口径自洽，落在单线设备额的两成上下，
+  # 而非行业整体口径。带 [0.165, 0.285]。
+  domestic_share_band:
+    type: consistency
+    lhs: "(dram_domestic_total + nand_domestic_total) / (dram_equipment_total + nand_equipment_total)"
+    rhs: "0.225"
+    tol: 0.06
+    methodology: true
+
+  # 红线5：DRAM 与 NAND 的设备结构不同，不可套同一套环节占比向量。
+  # 两条带刻意互不相交（上带止于 0.535，下带起于 0.55）——共用同一向量必使其一失败。
+  etch_depo_share_dram:
+    type: consistency
+    lhs: "dram_etch_weight + dram_depo_weight"
+    rhs: "0.475"
+    tol: 0.06
+    methodology: true
+  etch_depo_share_nand:
+    type: consistency
+    lhs: "nand_etch_weight + nand_depo_weight"
+    rhs: "0.665"
+    tol: 0.115
+    methodology: true
+
+  # ============ C 组：公式依赖字段（无标签，无 GT 键 → NA） ============
+  # 类型取 number 而非 present，为的是拿到 validators.py 的单位归一：环节占比与国产化率
+  # 被写成百分号的概率极高，present 类型不会被转成小数，级联公式会静默拿不到数而集体转 NA。
+  dram_unit_price:      {type: number}   # 亿元 / 万片月产能
+  dram_wspm:            {type: number}   # 万片/月
+  nand_unit_price:      {type: number}
+  nand_wspm:            {type: number}
+  dram_etch_weight:     {type: number}   # 刻蚀占比（小数）
+  dram_depo_weight:     {type: number}   # 薄膜沉积占比
+  dram_litho_weight:    {type: number}   # 光刻占比
+  nand_etch_weight:     {type: number}
+  nand_depo_weight:     {type: number}
+  nand_litho_weight:    {type: number}
+  dram_litho_domestic:  {type: number}   # 光刻环节的国产金额（亿元）
+  nand_litho_domestic:  {type: number}
+
+  # 字典型依赖：{环节名: 金额} / {公司名: 金额}，评分器由 build_env 派生 __sum
+  dram_step_domestic:   {type: present}
+  nand_step_domestic:   {type: present}
+  company_increments:   {type: present}
+
+  # ============ D 组：交付物与覆盖度（无标签，喂 D3 与报告） ============
+  workbook_formula_layer_present:   {type: present}   # 交付物暴露了公式层（.xlsx 或逐格计算式）
+  dram_block_present:               {type: present}
+  nand_block_present:               {type: present}
+  dram_nand_structure_differentiated: {type: present} # 两厂各有一套环节占比向量（表述层）
+  assumption_cells_count:           {type: count_min, target: 4}  # 单价/占比/国产化率/份额
+  process_steps_covered:            {type: count_min, target: 9}  # 题面四类 + 光刻/CMP/注入/涂胶/热处理
+  companies_covered:                {type: count_min, target: 6}
+  elasticity_column_present:        {type: present}   # 增量 ÷ 2025 营收
+  caliber_source_table_present:     {type: present}   # 数据来源与口径表
+  # 敏感性页属结构自由（deliverable_compliance 明说不据此扣结构分），故不打 methodology 标签：
+  # 缺失只留在报告里，不拖累 D2 第一层基线。
+  sensitivity_monotonic:            {type: monotonic, row_dir: asc, col_dir: asc}

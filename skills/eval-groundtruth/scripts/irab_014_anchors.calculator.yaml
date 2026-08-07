@@ -1,0 +1,68 @@
+calculator_id: irab_014_anchors
+script: irab_014_anchors.py
+version: "1.0"
+family: irab-import
+deterministic: true
+network: false
+requires: []
+invocation: "--out {out} [--snapshot {snapshot}]"
+outputs:
+  - revenue_2025_9m_pre
+  - net_profit_2025_9m_pre
+  - revenue_2025_9m_post
+  - net_profit_2025_9m_post
+  - revenue_2025_full
+  - net_profit_2025_full
+  - gross_margin_2025
+  - gross_margin_2024
+  - operating_cashflow_2025
+  - revenue_2024_full
+  - net_profit_2024_full
+  - revenue_2023_full
+  - q1_2025_revenue
+  - q2_2025_revenue
+  - q3_2025_revenue
+  - q4_2025_revenue
+  - q1_2025_np
+  - q2_2025_np
+  - q3_2025_np
+  - q4_2025_np
+  - revenue_2026q1
+  - net_profit_2026q1
+  - gross_margin_2026q1
+  - operating_cashflow_2026q1
+  - contract_liability_2024_end
+  - contract_liability_2025_end
+  - contract_liability_2026q1_end
+  - dividend_total_fy2025
+  - dividend_payout_ratio_fy2025
+  - market_cap
+  - pb
+  - pe_ttm
+  - stock_price
+  - moutai_revenue_total_2025
+  - moutai_net_profit_2025
+  - moutai_gross_margin_2025
+  - moutai_pe_ttm
+  - moutai_pb
+  - moutai_dividend_yield
+  - moutai_payout_ratio
+  - luzhou_pe_ttm
+  - luzhou_dividend_yield
+  - baijiu_industry_revenue_yoy_2025
+  - baijiu_industry_netprofit_yoy_2025
+side_outputs: []
+needs_market_data: false
+self_check: >
+  12 项: GT值数量与声明一致; 全部为有限数值; 重述前后前三季营收/净利润确实不同且重述前更高
+  (发货确认早于终端动销确认); 四季度营收/净利润之和与全年一致(±0.05/±0.1亿, 验证转录数字
+  没算错); 真实Q4营收明显偏离"重述前前三季-重述后全年"这一跨口径混算得出的错误值(相差>50亿);
+  2026Q1营收/净利润为正; 2025年重述后归母净利润仍为正; 毛利率落在合理区间; 五粮液PE(TTM)
+  明显偏高、茅台PE(TTM)明显更低(印证五粮液PE(TTM)因重述而失真, 不可直接横向比较)。
+scale: "亿元 for absolute financials; fraction for pct fields (44.49%->0.4449 风格); PE/PB 为纯比率。"
+out_of_scope: >
+  批价(挂牌 vs 实际成交)、渠道库存、股息率、回购/集团增持计划、账上货币资金——gold facts
+  原文对这些量给出的是区间或多口径, 不存在单一正确值, 不设点值真值(见脚本内
+  provenance.coverage_gaps)。给这些量编一个点值会惩罚"如实标注区间"这一 gold 明确要求的
+  正确行为, 同时放行伪精确的答案。
+data_cutoff: "约2026-06-12(估值数据基准); 财务数据基准为2026-04-30披露的FY2025年报与随后的2026Q1季报"

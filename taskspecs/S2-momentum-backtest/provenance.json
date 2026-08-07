@@ -10,7 +10,7 @@
     "extractor": "1.0"
   },
   "review_status": "frozen",
-  "container_hash": "03358aa6f56ce4ac",
+  "container_hash": "c83f22107f394a0d",
   "notes": "v1.0.0: container_hash stamped by eval-taskspec-lint --stamp. v1.1.0: removed CF5 from cf_rules, added objective_scoring_mode: deviation with per-field deviation_scoring.max_dev in checkpoint_schema. Engine scripts (grade_checkpoints.py, aggregate.py) extended to support --scoring-mode deviation. Constitution layer NOT modified. v1.2.0: prompt_text expanded to full unambiguous specification from S2-quant-strategy-backtest.md; measurable_outputs refined; required_inputs enhanced with data-source notes; judge_notes.md updated with stock-filter, cost-formula, and NAV-walkthrough anchors.",
   "data_provisioned": {
     "date": "2026-07-14",

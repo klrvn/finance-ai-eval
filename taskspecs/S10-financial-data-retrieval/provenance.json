@@ -17,16 +17,28 @@
     "calculator": "financial_data_snapshot.py v1.1 (snapshot, embedded answer key)"
   },
   "review_status": "frozen",
-  "container_hash": "pending_recompute",
+  "container_hash": "1c97e52990918236",
   "data_provisioned": {
     "mode": "snapshot",
     "gt_kind": "calculator",
     "calculator": "financial_data_snapshot.py v1.1 (embedded frozen answer key)",
     "data_cutoff": "2026-07-20",
     "fiscal_years": {
-      "ZTE": ["2023", "2024", "2025"],
-      "POPMART": ["2023", "2024", "2025"],
-      "NVDA": ["2024", "2025", "2026"]
+      "ZTE": [
+        "2023",
+        "2024",
+        "2025"
+      ],
+      "POPMART": [
+        "2023",
+        "2024",
+        "2025"
+      ],
+      "NVDA": [
+        "2024",
+        "2025",
+        "2026"
+      ]
     },
     "calibers": {
       "net_profit": "归属母公司股东的净利润 (归母净利润)",

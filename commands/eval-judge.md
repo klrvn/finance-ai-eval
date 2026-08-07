@@ -80,6 +80,31 @@ path` mapping that YOU use for the final report. Never pass it to a subagent.
 `$RUN/Work_X/work.md` directly. Keeping all N works out of your context is what makes this fast —
 in a prior 4-work run, holding them resident cost 5.9M cache-read tokens across 83 turns.
 
+### 4b. Workbook submissions (`.xlsx` / `.xlsm`) — dump the formula layer
+
+Only relevant for containers whose deliverable is a spreadsheet (currently S13). Skip entirely
+when every submitted work is already text.
+
+A blind judge has `tools: Read` and cannot open a workbook. If the container ships
+`tools/workbook_dump.py`, convert each spreadsheet work to text **in the shell** (so it still
+never enters your context) and keep the original alongside for the pipeline agent:
+
+```bash
+# per work whose source file is .xlsx/.xlsm — instead of the plain `cp` above:
+mkdir -p "$RUN/Work_A" && cp "<abs-path-of-work-A>" "$RUN/Work_A/work.xlsx"
+"<PY>" "$C/tools/workbook_dump.py" --in "$RUN/Work_A/work.xlsx" --out "$RUN/Work_A/work.md"
+```
+
+- The judge still receives **only** `work_file: $RUN/Work_X/work.md` — the dump. It shows every
+  cell as `单元格 | 公式 | 值`, which is what lets it assess a live-formula model at all.
+- The `eval-pipeline` agent has Bash and reads **both**: `work.md` for prose and `work.xlsx` via
+  openpyxl for exact cell extraction.
+- The dump self-reports two conditions the judge must not misread: a workbook with **no formulas
+  at all**, and a workbook whose formulas were **never computed** (openpyxl-written files carry no
+  cached values, so the value column is legitimately blank). Do not paraphrase or strip those
+  banners.
+- Text works are copied to `work.md` unchanged, exactly as in §4.
+
 ## 5. Load the frozen spec
 Read the container's `spec.yaml`, `checkpoint_schema.yaml`, `gt_recipe.yaml`, `judge_notes.md`,
 and `<ROOT>/rubrics/constitution.md`. Extract:
@@ -235,3 +260,40 @@ Write `<runDir>/Work_X/cf_flags.json`. **CF1 is PROPOSED only** — do not self-
 Read `<runDir>/report.md` and present the scorecard: total /100, D1-D6 levels, CF flags,
 one-line verdict per work. Flag any `needsReview` dimensions. Point to `<runDir>` for
 full artifacts.
+
+### Readability requirement — 语句通顺易读，句子信息密度不要过大
+
+`aggregate.py` can only concatenate fixed template sentences, so it cannot meet this on its own.
+**You must**, both in what you present here and in any narrative rewrite of `report.md`:
+
+- **One idea per sentence.** Never pack objective baseline + deduction points + weight + weighted
+  score + verdict into a single clause. Lead with the conclusion, then give the evidence; split
+  into several sentences or a short list where needed.
+- **Rewrite the high-density template lines**, e.g. the verdict sentence that chains margin +
+  deciding dimension + provisional-ranking rationale together. (The two-layer scoring lines and
+  the overview-table legend are already emitted one-idea-per-line by `aggregate.py` — leave them.)
+- **Do not repeat zero-weight dimensions per work** — collapse D4/D5 into a single note when their
+  weight is 0.
+- **Keep one language throughout**; do not mix Chinese and English judge rationales.
+
+> **Hard constraint: numbers, levels, tables and checkpoint results are hard data. Reword freely —
+> never alter a value, a ranking, or a conclusion.** Readability edits apply to narrative prose only.
+> `report.md` as emitted by `aggregate.py` is the reproducible evidence artifact; if you rewrite it,
+> keep the script-generated tables intact.
+
+### Checkpoint table — always in full
+
+**Whenever the task has deterministic checkpoints, always show the full checkpoint × work table.**
+Never omit it, sample it, list only the failures, or replace it with a prose summary — in the
+report *or* in what you present here.
+
+- **Rows = every checkpoint** (the union of checkpoint IDs across all works). Include passes and
+  `NA`s, not just failures; do not collapse rows because they are all `通过`.
+- **Columns = every work.** No work is dropped for scoring low, ranking last, or making the table
+  wide.
+- Failures carry their deviation `(Δ=…)`; keep `NA` rows and the footnote that `NA` does not
+  deduct and is removed from the denominator.
+- `aggregate.py` already builds the table to this rule. Your job is to **preserve it verbatim** —
+  the readability pass above must not touch it, only the prose around it.
+- The only permitted substitute is `_本任务无确定性检查点。_`, and only when the task genuinely
+  has none.

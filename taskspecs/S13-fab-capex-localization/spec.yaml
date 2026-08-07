@@ -1,0 +1,147 @@
+task_id: S13
+version: 1.0.0
+family: capex-allocation
+tier: T2
+persona: 半导体行业研究员
+
+# prompt_text 与 task_description.md 逐字一致 —— 那份是发给候选人的题面，盲评评分官
+# 拿到的是本字段。改动其一务必同步另一份，否则评分官会对着一份候选人没见过的题面打分。
+prompt_text: |
+  # 存储扩产的国产设备受益测算
+
+  ## 情景
+
+  长鑫存储（CXMT，DRAM）与长江存储（YMTC，3D NAND）两家国内存储大厂扩产。
+
+  题面给定的假设（不是待查事实，直接用）：两家各新增月产能 3 万片/月
+  （12 英寸晶圆，wafer starts per month，WSPM），合计新增 6 万片/月。
+
+  你是半导体行业研究员。请测算这波扩产会给国产半导体设备厂商带来多少订单增量，
+  并搭成一个可检查公式层的 Excel 测算底稿。
+
+  ## 要建的模型
+
+  沿下面这条链，用活公式逐层贯通：
+
+  | 层 | 计算 | 产出 |
+  |---|---|---|
+  | 1 | 新增产能 × 单万片月产能设备投资单价 | 每厂单线设备投资总额 |
+  | 2 | 单线设备投资总额 × 各工艺环节占比 | 各环节设备投资额 |
+  | 3 | 各环节设备投资额 × 该环节国产化率 | 各环节国产设备金额 |
+  | 4 | 各环节国产金额 × 各公司在该环节的国产内部份额 | 分摊到具体上市公司 |
+  | 5 | 逐公司汇总，并除以该公司 2025 年营业收入 | 每家的订单增量与相对弹性 |
+
+  工艺环节至少覆盖刻蚀、薄膜沉积、清洗、量测检测，并补齐光刻、CMP、离子注入、
+  涂胶显影、热处理等主要环节。
+
+  还需给出两个校验公式：
+
+  - 各厂的环节占比合计（用于自查拆分是否完整）
+  - 各公司订单增量之和 与 各环节国产金额之和 的勾稽闭合（两个方向算同一笔钱，应当对上）
+
+  ## 口径规定（第一优先级规则，优先于任何其他惯例）
+
+  1. 数据基准时点 = 2026 年 6 月 13 日。此后发生的事件无需考虑。所引数据须反映该时点
+     的最新情况。
+  2. 产能单位 = 万片/月（WSPM），指 12 英寸晶圆的月投片产能。不是年产能，不是晶圆面积。
+  3. 金额单位 = 亿元人民币。若某项数据的原始来源以美元计价，须换算为人民币并注明所用汇率；
+     不同币种的数值不得直接相加。
+  4. 区分「设备投资」与「晶圆厂总投资」。这两个口径的单万片数值不同。请明确声明你的单价格
+     用的是哪一个；若用的是总投资口径，须在模型中显式换算到设备口径后再往下分摊。
+  5. 区分「订单」与「收入」。设备订单与收入确认在时点与含税口径上都不一致。同一笔金额在
+     表中只能有一种身份，请标明是哪一种。
+  6. 国产化率必须标明口径。「国产化率」在不同语境下指向不同对象——不同的晶圆厂、不同的
+     产线平台、不同的时点，数值可以相差数倍。你在每一处使用的国产化率，都要注明它是哪一家厂、
+     哪一条产线/平台、哪一个时点的口径。
+  7. 两厂分别建模。长鑫与长存的单价、环节占比、国产化率、公司份额均须各自独立设置，
+     不要让两厂共用同一套参数。
+  8. 取不到可信数据的项，留空并标注「待查」，不要估一个数填进去。部分输入（尤其是各公司
+     在某个环节的国产内部份额）并无公开披露，请把它们做成显式标注的假设格并说明取值依据，
+     不要写成看起来像事实的点值。
+  9. 口径分歧较大的输入请以区间建模并标注所采口径。本题的多个关键输入在不同权威来源之间
+     存在显著分歧，这是数据本身的性质，不是需要你消除的问题。给出区间并说明你在基准情形下
+     取了哪一端、为什么，好过塞一个不交代来源的精确点值。
+
+  ## 交付物
+
+  必须暴露公式层。提交 .xlsx 工作簿；若以文本形式提交，则每一个计算出来的数值都要
+  逐格给出它的计算式。纯文字结论、纯贴数的表格、或只描述框架而无可核算式，都不算完成交付。
+  只写「见附件 model.xlsx」而不展开公式与数值，相关部分视为缺失。
+
+  假设要可调。单价、各环节占比、各环节国产化率、各公司份额都要做成独立的假设格——
+  改一个假设，全表应当跟着重算。
+
+  附一份「数据来源与口径表」，逐项说明下列输入的来源与年份/季度：单万片月产能设备投资单价、
+  各工艺环节的价值量占比、各工艺环节的国产化率、各公司在各环节的国产内部份额、
+  各设备厂商 2025 年营业收入（相对弹性的分母）。
+
+  ## 框架自由度
+
+  表的张数、行列布局、两厂在版面上如何摆放、配色与标签措辞、是否单独做一页敏感性分析，
+  均属你的设计自由。公司覆盖到主要受益厂商即可，不必穷尽每一家小标的。
+
+  不可缺省的只有两样：上面那条五层主链（假设可调 → 分环节拆分 → 国产化率分摊 → 落到公司 →
+  订单增量，且前后用活公式贯通并给出勾稽校验），以及数据来源与口径标注区。
+
+measurable_outputs:
+  - 分 DRAM（长鑫）与 3D NAND（长存）两块各自建模的单线设备投资额（活公式：产能 × 单价）
+  - 各工艺环节的设备投资额拆分（活公式：单线总额 × 环节占比），且各厂环节占比合计自洽
+  - 各环节国产设备金额（活公式：环节额 × 该环节国产化率），含光刻行的近零结果
+  - 各公司订单增量（活公式：跨环节按份额聚合），以及与环节层国产合计的勾稽闭合
+  - 每家公司的订单增量 ÷ 其 2025 年营业收入 的相对弹性
+  - 数据来源与口径表：单价 / 环节占比 / 国产化率 / 公司份额 / 2025 营收 的来源与时点
+
+rubric_weights: {D1: 20, D2: 30, D3: 20, D4: 10, D5: 5, D6: 15}
+objective_dims: [D1, D2]
+objective_scoring_mode: binary
+
+# 权重理由：
+#   D2=30：本题的身份是「能否搭出一个自己不跟自己矛盾的级联模型」。级联闭合关系有 13 个
+#     methodology 检查点承载，是判别力最集中的地方。
+#   D3=20：deliverable_compliance 把「五层骨架齐备且经计算」写成缺一降档，且明确判定
+#     纯文字结论/纯贴数表格为未满足交付。
+#   D1=20：取数（各厂商营收基数、招股书锚点）与时效性（国产化率口径、扩产与上市状态）。
+#   D6=15：是否真的用工具搭出了可重算的公式层，而非手填数字。
+#   D4=10：光刻大额低国产化的背离、订单与收入确认时滞等洞察。
+#   D5=5：相对弹性与敏感性是题面明确要求的可操作性输出，故不像 S12 那样归零。
+#
+# 不启用 grounding_group_weights：13 个 grounding 检查点等权。时效性的惩罚力度由 CF4
+# （封顶 D1 到等级 1）提供，比在第一层调权重狠得多；分组留作 v1.1 细化。
+
+citation_policy: {mode: sample, k: 6}
+cf_rules: [CF1, CF2, CF3, CF4, CF5]
+cf_thresholds: {CF2_uncited_ratio: 0.30}
+
+required_inputs:
+  - name: groundtruth_snapshot.json
+    needed_for: "GT 答案键的可读镜像 / 可选 override；默认 GT 为计算器内嵌的冻结答案键"
+    na_policy: "计算器默认使用内嵌答案键，不依赖此文件；提供 --snapshot 时覆盖内嵌键"
+
+task_validators:
+  - {name: cascade_closure, realized_by: "checkpoint company_vs_step_tie_out（consistency，Σ公司 ↔ Σ环节）+ dram/nand_domestic_total（reconcile）"}
+  - {name: step_weight_integrity, realized_by: "checkpoint dram_step_weights_sum / nand_step_weights_sum（sum_to）"}
+  - {name: lithography_near_zero, realized_by: "checkpoint litho_domestic_near_zero（consistency，光刻国产受益须落在近零量级）"}
+  - {name: dram_nand_structure_distinct, realized_by: "checkpoint etch_depo_share_dram 与 etch_depo_share_nand 的两条互不相交的带；两厂共用同一占比向量必使其一失败。表述层缺陷另由 D2 第二层锚点兜底"}
+  - {name: live_formula_layer, realized_by: "checkpoint workbook_formula_layer_present + 盲评 D6 / D3；.xlsx 作品由 tools/workbook_dump.py 展开公式层"}
+  - {name: vendor_revenue_base, realized_by: "9 个 *_revenue_2025 检查点（number, grounding, rel 2%）"}
+  - {name: localization_caliber_freshness, realized_by: "checkpoint ymtc_phase3_localization（ratio, grounding）+ CF4"}
+
+engine_requirements:
+  calculator: fab_capex_anchors
+  gt_kind: calculator
+  gt_version: "1.0"
+  checkpoint_types: [number, ratio, sum_to, count_min, present, reconcile, consistency, monotonic]
+  tolerance_policy: >
+    营收与招股书锚点用相对容差 rel:true tol:0.02——gold 自己对这两类数据标注的就是 ±2%。
+    ymtc_phase3_localization 用绝对容差 0.15 围绕 0.55，落在 [0.40, 0.70]：既接受「三期国产
+    设备占比首次超过 50%」这一当期口径的各种表述，也把陈旧的「晶圆厂平均 15-30%」口径挡在外面。
+    级联闭合关系（reconcile/consistency）一律用相对容差 0.02-0.05——本题的量级由假设决定，
+    绝对容差没有意义；勾稽偏差超过 5% 即判分摊逻辑不自洽，与 gold 的红线1 同阈值。
+    litho_domestic_near_zero 用绝对容差 0.5（亿元）：光刻国产化率不足百分之一，其国产受益
+    在本情景的量级下必然是零点几亿；给非零受益的作品会显著超出。
+    etch_depo_share_dram/nand 的两条带刻意互不相交（上带止于 0.535，下带起于 0.55），
+    使「两厂套用同一套环节占比向量」这一结构缺陷必然被其中一条捕获。
+  requires_grader_feature: "build_env 的 __sum 派生（字典型字段喂 reconcile/consistency）；compare_scalar 的 rel 容差"
+  data_fetch_mode: "snapshot (frozen anchor key as of 2026-06-13, embedded in calculator)"
+  min_grader_version: "1.1"
+  min_aggregator_version: "2.3"

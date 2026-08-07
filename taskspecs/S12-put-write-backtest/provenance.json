@@ -1,18 +1,14 @@
 {
   "task_id": "S12",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "origin": "legacy-v1",
   "authored_by": "eval-judge container-authoring, adapted from IRAB irab-004 (Investment Research Agent Benchmark, Rabyte Technology, CC BY 4.0)",
   "origin_note": "New authored container (not a v1 migration). origin is tagged 'legacy-v1' to satisfy the spec-lint governance gate, which currently only accepts that value; true authorship is recorded here.",
-
   "design_thesis": "内部一致性优先的回测容器。设计出发点是：回测任务的可核验性沿推导链逐级衰减——输入层（指数逐年回报）有唯一外部真值；中间层（对照组指标）结构完全确定、可由输入层精确推导；输出层（策略组指标）取决于定价假设，不存在唯一真值。因此外部真值只用在真正存在唯一答案的地方，输出层一律以内部类型（reconcile/consistency/present）承载。这使容器测的是「数据取对了 × 计算链自洽」两件正交的事，而非「你的答案是否等于我的答案」。",
-
   "why_no_strategy_gt": "历史期权权利金没有公开的权威逐月序列（IRAB gold facts 明确标注为数据缺口），且回测结果取决于 IV 取值、保证金口径、换仓滑点、被指派处理逻辑等假设——属**模型依赖**而非数据缺失，补数据也解决不了。更关键的是 IRAB gold 的 data_distortion 段把「给出精确到小数点的策略指标却不交代期权数据来源与假设」列为失真，把「显式标注为基于假设的估算并给区间」列为正确行为。若给策略指标设点值 GT，会惩罚正确行为、放行伪精确答案——评分方向反转。这是本容器最重要的设计约束。",
-
-  "method_evidence": "29 个检查点分三组：(1) D1 第一层 6 个中债-综合财富(总值)逐年回报（type pct，外部真值，财富口径由 prompt 钉死、无合法替代，故容差紧；误用净价/全价会整体偏离约 3%/年而使 6 个检查点全部失败——这是 gold 列为最典型失真之一的捕获目标）；(2) D2 第一层 8 个方法检查点，其中 2 个 reconcile 做策略组累计↔年化双向互推、1 个 pct 对照组年化外部锚定（宽容差）、1 个 reconcile 对照组累计单向推导、2 个 consistency 夏普闭合、1 个 consistency 跨组差异闭合、1 个 count_min 中间量披露汇总；(3) 15 个 present 检查点无标签，作用是把值取出来喂给公式、在报告中留下披露审计痕迹，且不用「报了就通过」的容易题稀释 D1/D2 第一层基线。",
-
+  "method_evidence": "36 个检查点分四组：(1) D1 第一层 6 个中债-综合财富(总值)逐年回报（type pct，外部真值，财富口径由 prompt 钉死、无合法替代，故容差紧；误用净价/全价会整体偏离约 3%/年而使 6 个检查点全部失败——这是 gold 列为最典型失真之一的捕获目标）；(2) D1 第一层 6 个沪深300 逐年回报 + 1 个路由字段 csi300_caliber（type pct，外部真值，经 gt_variants 按作品声明的口径路由到全收益或价格指数序列比对，tol 0.005）；(3) D2 第一层 8 个方法检查点，其中 2 个 reconcile 做策略组累计↔年化双向互推、1 个 pct 对照组年化外部锚定（宽容差）、1 个 reconcile 对照组累计单向推导、2 个 consistency 夏普闭合、1 个 consistency 跨组差异闭合、1 个 count_min 中间量披露汇总；(4) 15 个 present 检查点无标签，作用是把值取出来喂给公式、在报告中留下披露审计痕迹，且不用「报了就通过」的容易题稀释 D1/D2 第一层基线。grounding 腿为 (1)+(2) 共 12 个等权检查点。",
   "key_design_decisions": {
-    "csi300_yearly_checkpoints_omitted": "沪深300 逐年回报故意不设检查点。全收益口径与价格指数口径的逐年差异达 0.9-1.7pp，任何能同时容纳两者的容差都宽到失去鉴别力。该腿的口径正确性改由「对照组年化（宽容差）+ D1 第二层锚点（使用价格指数扣 0.5）」间接度量。",
+    "csi300_yearly_via_gt_variants": "沪深300 逐年回报设 6 个检查点，经 gt_variants 按口径路由（v1.1 新增；v1.0 曾故意不设）。全收益（H00300.CSI）与价格指数（000300.SH）都是合法的 ETF 腿口径，逐年相差 0.9-3.6pp，所以 v1.0 放弃了这组检查点——当时只能用单一容差，而任何同时容纳两者的容差都宽到失去鉴别力。v1.1 改为两条序列都作为 GT 键输出，检查点声明 gt_variants: {field: csi300_caliber, map: {total_return: csi300tr_<y>, price: csi300pr_<y>}}，评分器按作品自己声明的口径选中一条比对。于是容差可收紧到 0.005：用全收益的作品只对全收益负责，用价格指数的只对价格指数负责，谁都不会因「用了另一种合法口径」而在第一层判错。安全前提是两条序列逐年最小间距 1.68pp（2021）是容差 0.5pp 的三倍以上，故同一个数不可能同时通过两种口径——该前提由计算器 self_check 的逐年间距断言（>= 0.01）守护，任何使序列靠近的分量修改会使自检失败而非静默削弱鉴别力。作品未声明口径时评分器按数值推断，且**推断是全组一次性的**（取总绝对偏差最小的口径），不逐年挑选——否则作品可以逐年挑更近的那条序列，得分好于任何单一口径。已声明的口径优先于数值：声明全收益却报价格指数数字的作品会吃 6 个 fail，其自相矛盾被暴露而非被推断悄悄抹平。口径**选择**的优劣仍由 D1 第二层锚点承载（用价格指数扣 0.5），与第一层的数值度量不重叠。",
     "benchmark_cum_no_gt": "对照组累计不设 GT。实测两口径累计差距 0.009386（复利放大 6 年的结果），需 tol ≥ 0.0094 才能同时容纳，那已失去鉴别力。改由 reconcile 闭合（累计 ← 年化）+ 年化的紧 GT（tol 0.0015，实测两口径差距 0.00127）联合约束——一个数据错误的答案会在年化 GT 上失败，一个自相矛盾的答案会在闭合上失败。",
     "bidirectional_reconcile_on_strategy": "策略组的累计与年化用双向互推（各以对方为公式输入）。两者都报则两个检查点都判定；缺一个则缺的那个 fail（reconcile 在自报值缺失时判 fail）、另一个 NA。由此「藏输入」永远不比「照实报」便宜，堵住了纯一致性方案「藏中间量→检查点转 NA→不扣分」的反向激励。对照组因年化已有外部 GT（缺失即 fail）无此漏洞，故只需单向闭合。",
     "asymmetric_closure_tolerances": "闭合容差按导数不对称设定。由累计推年化：d(annual)/d(cum) ≈ 0.135，输入舍入被压缩，tol 0.001 已足够紧。由年化推累计：d(cum)/d(annual) ≈ 7.3，6 年复利放大输入舍入，tol 0.004 才公平（学生若把年化报成 1 位小数，±0.0005 的舍入会放大到累计的 ±0.0037）。",
@@ -22,13 +18,11 @@
     "max_drawdown_coverage_gap": "最大回撤**没有任何检查点覆盖**，这是已知且有意接受的空缺。它无外部 GT，也不出现在任何闭合关系里，且六年组合逐年回报全为正（最低 2.14%），连「回撤 ≥ 最差年度亏损」的弱下界都用不上。合理性判断交由 D2 第二层判官锚点（报出低于 1% 或高于 10% 且无计算依据则扣 1）——那是不可数值核验的缺陷，属第二层合法辖区，不构成双罚。年化波动率情况类似：虽出现在夏普闭合的分母，但只要作品把夏普也按同一个错误的波动率算出来就依然自洽，故同样配了第二层锚点。",
     "d2_variance_disclosure": "D2 只有 8 个检查点承载 35 权重，单点失败约值 4.4 分总分，D2 方差偏高。这是专注探针定位的固有属性——不追求检查点数量，只保留真正有约束力的关系。其中 3 条（策略组双向互推、对照组年化 GT）对任何合规答案都不会变成 NA，构成不可规避的信号底线。"
   },
-
   "prompt_deviation_from_irab": [
     "补全了年度再平衡约定：原 IRAB prompt 只说「对照组为 95%中债-综合财富+5%沪深300ETF」，未指定是否再平衡。这是原题的规格缺口而非故意留白——不补全则跨组差异闭合关系不成立，且对照组的确定性推导无从进行。",
     "要求附上两个指数的逐年回报作为计算依据：因为有 GT 的检查点在「学生未报」时判 fail 而非 NA（engine 只有这两种状态，容器 schema 的 na: 段在 grade_checkpoints.py 中无读取代码），若不在 prompt 中要求，学生会因未披露原题从未要求的中间量而吃 6 个 fail。补上这一句使评分要求与题面要求对齐。",
     "在注意事项中提示了「历史期权权利金无公开权威逐月序列，若指标建立在定价假设上请说明假设并给区间」：对应 IRAB gold 的 data_distortion 正确行为条款，使该考点对候选人可见而非暗坑。"
   ],
-
   "irab_rubric_mapping": {
     "calculation_correctness": "D2 第一层的闭合检查点（IRAB 给 irab-004 的权重 2）",
     "data_quality": "D1 第一层的 6 个中债逐年检查点 + 引用核验（IRAB 权重 3，本容器最高的外部锚定）",
@@ -38,36 +32,33 @@
     "user_need_coverage": "D3 完整性锚点（IRAB 权重 1）",
     "data_distortion": "D1 第二层的口径与代理标的锚点 + D2 第二层的杠杆口径与权利金性质锚点（IRAB 权重 -1，负权重惩罚）；CF1 保留用于确凿捏造"
   },
-
   "engine_versions": {
-    "grader": "1.0",
+    "grader": "1.1 (adds gt_variants: multi-convention ground-truth routing; see resolve_gt_variants in grade_checkpoints.py)",
     "aggregator": "2.3",
     "extractor": "1.0",
-    "calculator": "put_write_snapshot.py v1.0 (frozen snapshot, network-free, derives the control-group figure rather than hardcoding it)"
+    "calculator": "put_write_snapshot.py v1.1 (frozen snapshot, network-free, derives the control-group figure rather than hardcoding it; emits both CSI300 caliber series as GT keys)"
   },
-
   "data_provisioned": {
     "mode": "snapshot",
     "gt_kind": "calculator",
-    "calculator": "put_write_snapshot.py v1.0",
+    "calculator": "put_write_snapshot.py v1.1",
     "network": false,
-    "n_gt_values": 7,
-    "gt_values": "bond_2020..bond_2025 (6, 外部真值) + benchmark_annual_return (1, 由两条逐年序列 + 年度再平衡推导)",
-    "scale": "fraction —— gt_recipe.yaml 不得声明 percent_fields（提取器 validators.py 已把带 % 的作答值转为 fraction，两侧同刻度；声明会导致再除一次 100 使 7 个 pct 检查点全部失败）",
+    "n_gt_values": 19,
+    "gt_values": "bond_2020..bond_2025 (6, 外部真值) + benchmark_annual_return (1, 由两条逐年序列 + 年度再平衡推导) + csi300tr_2020..csi300tr_2025 (6, 沪深300 全收益 H00300.CSI) + csi300pr_2020..csi300pr_2025 (6, 沪深300 价格指数 000300.SH)。后 12 个是同一个量的两种合法口径，每份作品只有其中 6 个参与评分——由 checkpoint csi300_<y> 的 gt_variants 按作品声明的口径路由选中。",
+    "scale": "fraction —— gt_recipe.yaml 不得声明 percent_fields（提取器 validators.py 已把带 % 的作答值转为 fraction，两侧同刻度；声明会导致再除一次 100 使 13 个 pct 检查点全部失败）",
     "data_cutoff": "2026-07-31（2020-2025 六个完整年度已收官，序列不随时间变化）",
-    "self_check": "11 项：两条序列的覆盖完整性与数值有限性、债券财富指数逐年为正且落在合理区间、沪深300 负回报年份与已知市场方向一致、组合权重合计为 1、对照组累计与年化互推闭合、逐年连乘还原累计、对照组年化落在合理区间"
+    "self_check": "12 项：两条序列的覆盖完整性与数值有限性、债券财富指数逐年为正且落在合理区间、沪深300 负回报年份与已知市场方向一致、组合权重合计为 1、对照组累计与年化互推闭合、逐年连乘还原累计、对照组年化落在合理区间、**沪深300 两口径逐年间距均 >= 0.01**（gt_variants 数值推断与紧容差的前提）"
   },
-
   "verification_log": {
-    "calculator_run": "2026-07-31 实测通过：11/11 self_check，benchmark_annual_return = 0.04325、benchmark_cum_return = 0.289231，与手算一致。",
+    "calculator_run": "2026-07-31 实测通过：11/11 self_check，benchmark_annual_return = 0.04325、benchmark_cum_return = 0.289231，与手算一致。v1.1 复测：12/12 self_check（新增沪深300 两口径逐年间距断言），19 个 GT 值，benchmark 两值不变——新增的 12 个沪深300 GT 键不参与对照组推导，故不影响既有真值。",
     "caliber_tolerance_verified": "实测价格指数口径推出 annual = 0.04198、cum = 0.279845。年化差距 0.00127 ≤ tol 0.0015（两种合法口径都能通过第一层，如设计意图）；累计差距 0.009386（证实不给累计设 GT 的决策）。",
     "self_check_caught_an_authoring_bug": "首次运行时 self_check 失败，指出 CSI300_NEGATIVE_YEARS 常量写错——沪深300 全收益 2021 年为 -3.52%（负），负回报年份应为 {2021, 2022, 2023} 而非 {2022, 2023}。已修正。这是自检机制按设计发挥作用的实例。",
     "judge_notes_lint_verified": "以 spec_lint.py 的真实正则校验通过：无答案泄漏（JUDGE_LEAK_PATTERNS 零命中）、无加分锚点（additive bonus 零命中）、D1/D2 两段均含第一层与第二层标题、六个维度段落齐全。",
-    "pending": "见 DEPLOY.md 的待完成事项——尚未跑 spec_lint（需先落盘到 taskspecs/ 并注册）、尚未做金样验证（完美答案端到端跑通应得满分）。"
+    "gt_variants_routing_verified": "v1.1 实测 7 个路由用例全部通过（一次性验证脚本，未入库——本仓库尚无测试目录约定）：(1) 声明 total_return + 全收益数字 → 6 pass，basis=declared，比对 csi300tr_*；(2) 声明 price + 价格指数数字 → 6 pass，basis=declared，比对 csi300pr_*；(3) 未声明 + 价格指数数字 → basis=inferred 选中 price，6 pass；(4) 未声明 + 全收益数字 → basis=inferred 选中 total_return，6 pass；(5) 未声明且未报数字 → basis=unresolved，6 个全 NA，grounding 分母自动退回 6 个中债检查点；(6) **反挑口径**：未声明 + 3 年全收益 + 3 年价格指数 → 全组只选中一个口径（price），3 pass 3 fail，证实推断不逐年挑选；(7) **声明优先于数值**：声明 total_return 但报价格指数数字 → 仍按声明比对 csi300tr_*，6 fail，作品自相矛盾被暴露而非被推断抹平。",
+    "spec_lint_verified": "v1.1 实测：12 个容器 0 error，S12 为 PASS（无 warn）。新增的 gt_variants 校验做了反向验证——分别注入「GT 键不存在」「路由字段不在 schema」「单口径 map」「路由字段被打上 grounding 标签」四种错配，均被如实报出（前两者 ERROR、后两者 warn）。",
+    "pending": "金样验证（完美答案端到端跑通应得满分）尚未做。"
   },
-
   "review_status": "draft",
-  "container_hash": "pending_stamp",
-
-  "notes": "Family: quant-backtest（S2 动量回测的兄弟容器，但可核验性结构不同：S2 三段全可钉死故为完全确定性，S12 的输出层是模型依赖）。Weights: D1:25 D2:35 D3:15 D4:10 D5:0 D6:15。CF: CF1+CF2+CF5。Citation: sample,k=4。D1 objective weights: {citation:0.3, grounding:0.7}（沿用 data-retrieval 家族比例）。Scoring mode: binary。29 个检查点：6 grounding(pct) + 8 methodology(2 reconcile 双向 + 1 pct GT + 1 reconcile + 2 consistency 夏普 + 1 consistency 跨组 + 1 count_min) + 15 present(无标签)。"
+  "container_hash": "bdc537b7ff384cba",
+  "notes": "Family: quant-backtest（S2 动量回测的兄弟容器，但可核验性结构不同：S2 三段全可钉死故为完全确定性，S12 的输出层是模型依赖）。Weights: D1:25 D2:35 D3:15 D4:10 D5:0 D6:15。CF: CF1+CF2+CF5。Citation: sample,k=4。D1 objective weights: {citation:0.3, grounding:0.7}（沿用 data-retrieval 家族比例）。Scoring mode: binary。36 个检查点：12 grounding(pct — 6 中债 + 6 沪深300 经 gt_variants 口径路由，等权) + 8 methodology(2 reconcile 双向 + 1 pct GT + 1 reconcile + 2 consistency 夏普 + 1 consistency 跨组 + 1 count_min) + 1 present(csi300_caliber 路由字段，无标签) + 15 present(无标签)。"
 }

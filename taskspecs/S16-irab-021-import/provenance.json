@@ -1,0 +1,87 @@
+{
+  "task_id": "S16",
+  "version": "1.0.0",
+  "origin": "legacy-v1",
+  "authored_by": "human-reviewed, adapted from IRAB irab-021 (Investment Research Agent Benchmark, Rabyte Technology, CC BY 4.0); initial scaffold drafted by eval-irab-import (now removed from this repo)",
+  "origin_note": "First drafted by the (since-removed) eval-irab-import skill as a per-fact generic scaffold, then fully rewritten by hand: real atomic checkpoint fields, a working calculator with real GT values, and judge_notes anchors carried over verbatim from gold where the wording was already correct.",
+  "design_thesis": "与 S1(杜邦分析)完全同构的双正交容器。真值分两类: 原始财务数据(营业收入/净利润/总资产/权益, 3个报告期末+2个披露期的ROAE/ROAA)是真外部真值; 杜邦三因子与乘积由原始数据**计算**得出而非硬编码, 存在期末/平均两种合法口径, 用 gt_variants 按候选作品声明路由。核心可核验性不是'数字对不对'而是'三因子乘积能否与自报因子相乘闭环'——这是一个封闭代数恒等式, 由 consistency 检查点机械核验, 不需要外部真值。年报披露的 ROAE 与三因子乘积是两套不同口径, 故意不设'二者应相等'的检查点——那正是本题的核心陷阱, gold facts 的 data_inconsistency 红线1 明确警示。",
+  "classification_snapshot": {
+    "shape": "hybrid-model-correctness",
+    "containerize": true,
+    "tier": "T2",
+    "objective_dims": [
+      "D1",
+      "D2"
+    ],
+    "weight_hints": {
+      "D1": 20,
+      "D2": 30,
+      "D3": 20,
+      "D4": 20,
+      "D5": 5,
+      "D6": 5
+    },
+    "citation_policy_hint": {
+      "mode": "none"
+    },
+    "cf_hints": [
+      "CF1",
+      "CF5"
+    ],
+    "rationale": [
+      "data_inconsistency 里出现'乘积/闭环/恒等式/勾稽'一类措辞——存在一个可reconcile 的闭式恒等关系（如三因子乘积=目标值），即便没有 formula_construction字段，这类任务的可核验性结构等同于活公式任务，不应落进纯叙事桶",
+      "D2 已是本任务权重最高的维度——按 S12 先例不叠加 CF3，改让 D6 逐笔扣分承担'没真算'这一失败模式"
+    ],
+    "unmapped_fields": [],
+    "signals": {
+      "has_closure_identity": true,
+      "has_answer_correctness": false,
+      "has_skill_executability": false,
+      "has_formula_construction": false,
+      "has_calculation_correctness": false,
+      "has_reasoning_angle": true,
+      "has_user_need_coverage": true,
+      "has_data_completeness": false,
+      "has_data_inconsistency": true,
+      "has_source_authority": false,
+      "has_data_timeliness": false,
+      "has_non_consensus_view": false,
+      "has_chart_fidelity": false,
+      "facts_count": 13,
+      "tolerance_annotation_hits": 4,
+      "timeliness_signal_hits": 0
+    },
+    "task_id": "irab-021",
+    "irab_audit_rating": {
+      "line": "| **irab-021** | 招商银行杜邦分析 | **A** ⭐⭐⭐ | 与 S1（杜邦分析）**完全同构**——ROE = 净利率 × 周转率 × 权益乘数 + 连环替代法归因 + 口径对账。Eval Judge 已有 reconcile 类型直接支持。零新代码——只需写新容器（换公司、加归因 checkpoints） |",
+      "rating": "A"
+    }
+  },
+  "method_evidence": "28个检查点: 14个 grounding(10个原始财务数据 number + 4个披露ROAE/ROAA pct) + 8个 grounding 三因子/乘积(gt_variants 按 caliber_declared 路由期末/平均口径) + 2个 methodology consistency(roe_closure_2025/2024, 三因子乘积闭环) + 1个 methodology present(driver_attribution) + 3个无标签 present(caliber_declared 路由字段 + 两个交付物覆盖度字段)。",
+  "key_design_decisions": {
+    "gt_variants_for_caliber": "周转率/权益乘数/乘积三组量各设 gt_variants(eop/avg两条序列), 净利率不设(两口径下数值相同)。与S12的沪深300 caliber同构: 两种口径都是gold facts明确给出的合理做法, 路由而非放宽容差保留鉴别力。",
+    "no_roae_equals_product_checkpoint": "刻意不给'三因子乘积=披露ROAE'设检查点。gold facts 的 data_inconsistency 明确把这个等式列为最典型的失真——ROAE分母剔除其他权益工具并按时间加权，与三因子乘积(=归母净利润/归母权益)是两套口径。设这条检查点等于把陷阱编码成答案。disclosed_roae_*/disclosed_roaa_* 作为独立锚点存在，供候选作品对照说明差异，差异是否被正确解释交给D1/D2第二层判官。",
+    "consistency_not_reconcile_for_closure": "乘积闭环用 consistency(lhs=roe_product_*, rhs=公式)而非 reconcile, 因为 roe_product_* 本身已是独立的、有外部真值(gt_variants路由)的grounding检查点——用reconcile会让它同时承担'对外部真值'与'对自己算式'两个职责，改用额外的 consistency 检查点承担后者，两者不重叠。"
+  },
+  "prompt_deviation_from_irab": [
+    "补充了净利率分子(归母vs合并净利润)、周转率/权益乘数分母口径(期末vs平均)、权益乘数是否剔除其他权益工具三处口径声明要求——原题面'ROE=净利率×周转率×权益乘数'没有点名这些分歧，candidate 若不声明就可能被检查点判 fail 而非 NA(grade_checkpoints.py 只有这两种状态)，补上题面要求使评分对齐。",
+    "补充了'三因子乘积与披露ROAE可能不同'的提示，避免题面暗坑——但只说'可能不同、如实报告'，不点名哪个数是正确的乘积值。"
+  ],
+  "irab_rubric_mapping": {
+    "facts": "14个原始财务锚点 + 8个三因子/乘积锚点(D1第一层grounding)",
+    "reasoning_angle_coverage": "D4锚点(量化归因/机制拆解/背离识别/口径对账意识/趋势定位)",
+    "user_need_coverage": "D3完整性锚点(两年三因子齐备/乘积/对比/主驱动结论)",
+    "data_inconsistency": "roe_closure_2025/2024(consistency, 第一层) + D2第二层(口径混淆/方向矛盾/数量级矛盾)"
+  },
+  "coverage_gaps": {
+    "average_caliber_intermediate_values": "平均总资产/平均权益本身不设独立检查点(只作为计算器内部中间量)，因为候选作品通常直接报周转率/权益乘数的最终值而不单列平均分母——若需要更细粒度核验可在v1.1补充。"
+  },
+  "verification_log": {
+    "calculator_run": "2026-08-07 实测通过: 19/19 self_check, 28个GT值。三因子乘积在期末/平均两口径下均与净利率×周转率×权益乘数机器精度闭合，且与gold原文四舍五入参考值一致(±0.06pp/±0.02倍)。",
+    "spec_lint": "2026-08-07 实测: 0 error。",
+    "gold_answer_key_dry_run": "pending —— 完整LLM抽取+盲评判官端到端跑通尚未做。"
+  },
+  "review_status": "draft",
+  "container_hash": "c1c5423e8fe18f85",
+  "notes": "Family: equity-fundamentals(与S1同族)。Weights: D1:20 D2:30 D3:20 D4:20 D5:5 D6:5。CF: CF1+CF5。Citation: none。28个检查点，其中14 grounding原始数据 + 8 grounding三因子/乘积(gt_variants) + 2 methodology consistency + 1 methodology present + 3 无标签。冻结前仍需完整LLM抽取+盲评判官端到端dry run。"
+}

@@ -16,10 +16,16 @@ description: >
 ## 单作品评分
 
 对于每个维度，汇总器收集以下信息：
-- **比例与等级**：客观维度以连续比例 `fraction`(0-1) 计分（从 1.0 起步，每个未通过检查点按份额扣减），同时给出展示用等级 `level = round(4*fraction)`；主观维度取两位评分官**扣分后等级**的均值（`level_j = max(0, 4 − Σpoints_j)`，来自 `judge_N.json` 的 `deductions` 账本；无账本的旧版评审文件回退到其 `levels` 字段），`fraction = level/4`。
-  - `D1` 客观 `fraction = grounding_objective`，其中 `grounding_objective` =
-    当存在引用策略时为 `0.6*verified_fraction + 0.4*grounding_pass_fraction`，否则为 `grounding_pass_fraction`。
-  - `D2` 客观 `fraction = methodology_pass_fraction`（若任务未标 `methodology` 则回退到 `pass_fraction`）。
+- **两层合成**：每个维度的 `fraction`(0-1) 由两层取**算术平均**得出，展示用等级为 `level = round(4*fraction, 2)`。
+  - `fraction = (第一层基线 + 第二层扣分系数) / 2`
+  - **第一层基线** = 该维度实测出的客观比例，仅对 `objective_dims`（⊆ {D1,D2}）中的维度存在。
+  - **第二层扣分系数** = `max(0, (4 − 两位评分官平均扣分点) / 4)`。单个评分官的等级为
+    `level_j = max(0, 4 − Σpoints_j)`，取自 `judge_N.json` 的 `deductions` 账本；无账本的旧版评审文件回退到其 `levels` 字段。
+  - **第一层缺席的维度不参与平均**（D3/D4/D6，或客观指标缺失时）：`fraction` 就是纯扣分系数，与两层模型之前逐位一致。切勿与隐含的 1.0 取平均——那会让纯盲评维度保底 0.5。
+  - `D1` 第一层基线 `= grounding_objective`，其中 `grounding_objective` =
+    当存在引用策略且容器覆盖 citation > 0 时为 `cw*verified_fraction + gw*grounding_pass_fraction`，缺省 `{citation:0.0, grounding:1.0}` 时为 `grounding_pass_fraction`。
+  - `D2` 第一层基线 `= methodology_pass_fraction`（若任务未标 `methodology` 则回退到 `pass_fraction`）。
+  - 实现见 `scripts/aggregate.py` 的 `combine_layers()`；规则与设计理由见 `rubrics/constitution.md` §计分。
 - **扣分来源**：客观维度的 `objective_detail.failed_checkpoints` 列出具体未通过的检查点名（依据 taskspec 的 `checkpoint_schema` 字段标记归入 grounding/methodology）；主观维度的 `judge_N.deductions` 保存评分官的逐条扣分记录。
 - **权重与得分**：`weighted_points = fraction * weight`（**连续**，不先量化到 0-4 再折算——消除量化悬崖与银行家舍入的不一致）。权重来自任务的 `rubric_weights`。
 - **有效分母披露**：若某维度既无客观指标又无评分官等级（`level` 为 None），它既不默认满分、也不被扣分——其权重从总分中缺失。汇总器输出 `scored_weight`（实际参与计分的权重之和）、`unscored_dims` 与 `score_normalized`（`总分/scored_weight*100`），使部分评分的运行不会被误读为满 /100。
@@ -45,7 +51,7 @@ description: >
   "dimensions": {
     "D2": {
       "name": "方法论正确性",
-      "level": 3, "fraction": 0.6667, "source": "objective",
+      "level": 3, "fraction": 0.6667, "source": "layer1+layer2",
       "weight": 35, "weighted_points": 23.33,
       "needs_review": false, "capped_by": null, "capped_from": null,
       "judge_1": {"level": 3.5, "rationale": "复利口径有小瑕疵",
@@ -89,7 +95,7 @@ description: >
 | `name` | 维度中文名（D6 = 外部工具链完整度，只评计算执行轨迹与工具链覆盖度，不评数据来源层级） |
 | `description` | 维度评判内容简述 |
 | `level` | 0-4 等级，允许 0.5 步长（可能被 CF 封顶） |
-| `source` | 等级来源：`objective`（实测数值）、`judge_mean`（盲评扣分账本均值）、`judge_mean_fallback`（客观不可用时回退盲评）、`judge_missing`（盲评缺失） |
+| `source` | 等级来源：`layer1+layer2`（第一层实测基线与第二层扣分系数取平均）、`judge_mean`（无第一层基线，纯扣分账本）、`judge_mean_fallback`（本应有客观指标但缺失，回退盲评）、`judge_missing`（盲评缺失）。`objective` 为两层模型之前的旧值，引擎已不再产出，仅在读取历史评分卡时可能遇到 |
 | `weight` | 该维度在总分中的权重（来自 `rubric_weights`） |
 | `weighted_points` | `fraction × weight`，封顶后重新计算 |
 | `needs_review` | 两位评分官分歧超过一级时为 true |
@@ -106,11 +112,34 @@ description: >
 `scripts/aggregate.py --report` 生成 `report.md`，固定包含以下章节：
 
 1. **总分与排名**——排名 × 作品 × 总分表，含已应用/待确认 CF 与一行结论（有效分母不一致时附归一化分列）
-2. **各维度评分总览**——逐维度 × 逐作品的等级表，标注来源（客观/盲评）和封顶标记
-3. **各维度详细评分（D1-D6）**——对每个维度，逐作品列出：等级与得分、客观扣分来源（未通过检查点）、两位评分官的逐条扣分记录（扣多少/严重度/问题/证据）、CF 封顶信息、复核标记；每个维度末尾附**学生答案原文引用**区块，逐条列出该维度扣分点对应的学生答案原文片段（客观维度取自 `normalized.json` 的 `extracted[field].evidence`，主观维度取自盲评扣分账本的 `evidence` 字段），方便用户快速定位答案中的错误位置
+2. **各维度评分总览**——逐维度 × 逐作品的等级表，维度名附带权重（如 `D1 数据完整性与依据（权重40）`），标注来源（客观/盲评）和封顶标记；权重为 0 的维度不在此表显示
+3. **各维度详细评分**——对每个权重 > 0 的维度，逐作品列出：等级与得分、客观扣分来源（未通过检查点）、两位评分官的逐条扣分记录（扣多少/严重度/问题/证据）、CF 封顶信息、复核标记；每个维度末尾附**学生答案原文引用**区块，逐条列出该维度扣分点对应的学生答案原文片段（客观维度取自 `normalized.json` 的 `extracted[field].evidence`，主观维度取自盲评扣分账本的 `evidence` 字段），方便用户快速定位答案中的错误位置。权重为 0 的维度折叠为一行（`_本任务该维度权重为 0，不计分。_`），不逐作品展开
 4. **确定性检查点明细**——逐检查点 × 逐作品的 通过/未通过（含偏差值）/NA 表
 5. **引用核验与致命缺陷**——逐作品的 grounding 值、已应用 CF、待确认 CF
 6. **结论**——排序（单份作品为总分陈述）、前两名分差、决定性维度、不确定性说明（当分差 <3 分或决定性维度需复核时标注为暂定）
+
+### 行文要求（适用于报告全文）
+
+除上述章节结构外，报告还须满足一条行文要求：**语句通顺易读，句子信息密度不要过大**。
+
+`aggregate.py` 只能拼接固定模板句，无法自行调节句子密度，因此这一层由生成报告的 Agent 在脚本产物之上完成。具体要求：
+
+- **一句话只讲一件事。** 不要把「客观基线 + 扣分点数 + 权重 + 折算得分 + 结论」压进同一个长句；先给结论，再给依据，必要时拆成多句或短列表。
+- **改写模板中的高密度句式。** 例如结论段里把分差、决定性维度与暂定理由串在一起的长句，在面向人阅读的版本中应拆开重写。（两层计分的三行说明与总览表图例已由 `aggregate.py` 逐条拆开输出，无需再改。）
+- **零权重维度不逐作品重复展开**（如 D4/D5 权重为 0 时，合并为一句说明即可）。
+- **评语语言统一**，不要中英文混排。
+
+> **硬约束：数字、等级、表格与检查点结果是硬数据，只可改写措辞，不可改动任何数值、排名或结论。** 可读性改写只作用于叙述性文字。
+
+### 检查点表完整性要求
+
+**只要本次评测存在确定性检查点，报告就必须包含完整的「确定性检查点明细」表——不得省略、不得抽样、不得只列未通过项、不得用文字概述代替表格。**
+
+- **行 = 全部检查点。** 取所有作品检查点 ID 的并集逐行列出；通过、未通过、NA 一律照列，不因「全部通过」而合并或跳过。
+- **列 = 全部作品。** 参与本次评测的每一份作品都必须占一列，不因分数低、排名靠后或表格过宽而省略。
+- 未通过项附偏差值 `(Δ=…)`；`NA` 需保留，并在表下注明「不扣分，已从分母剔除」。
+- 该表由 `aggregate.py` 自动按上述规则生成（行取并集、列取全部作品），属硬数据。**可读性改写时整表原样保留**，只允许调整表格前后的说明文字。
+- 仅当任务确实不含任何确定性检查点时，才以 `_本任务无确定性检查点。_` 代替该表。
 
 ## 用法
 

@@ -1,0 +1,420 @@
+# =============================================================================
+# S14 检查点模式 — 共 64 个检查点(42 grounding + 13 methodology + 9 无标签)
+# =============================================================================
+# 设计原则: 外部真值只用在真正存在唯一答案的地方(逐轮峰谷点位/日期/收盘跌幅/
+# 基准对照收益率/拟合百元口径溢价率水平/修复交易日数/信用事件事实, 40 个 GT 键)。
+# 溢价率收缩幅度(pp)与"峰谷价格-跌幅%互算"一致性不设独立真值——它们是候选作品
+# 自己已报数值之间的内部自洽关系, 用 reconcile/consistency 直接对候选作品的已报
+# 字段求值(这正是 gold facts 自己列为最高发陷阱的"cross-foot 矛盾"检测)。
+#
+# 标签含义:
+#   grounding: true    → 计入 D1 第一层 grounding_pass_fraction
+#   methodology: true  → 计入 D2 第一层 methodology_pass_fraction
+#   两者皆无           → 只计入整体 pass_fraction, 不锚定任何维度分数
+#
+# 日期字段一律 YYYYMM 整数编码(年*100+月), tol=0(整数月精确匹配), 与"月份级即可
+# 算 present"的任务要求对齐——给到具体日期是加分但不额外设checkpoint, 由 D4 判官
+# 定性认可算深。
+#
+# gt_variants 仅用于 R1 的修复口径路由(distance-from-high vs distance-from-low,
+# 两者都是 gold facts 明确给出的合法起点选择, 终点相同)。溢价率**不**设 gt_variants
+# ——均值/算术平均口径在 gold facts 中数据不全, 见 gt_recipe.yaml design_note。
+# =============================================================================
+
+fields:
+
+  # ===========================================================================
+  # R1: 2022年1月-4月(峰 2022-01-04/437.69 → 谷 2022-04-26/384.40)
+  # ===========================================================================
+
+  R1_peak_date:
+    type: number
+    tol: 0
+    grounding: true
+    description: "R1 峰值月份(YYYYMM); 收盘口径"
+
+  R1_peak_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R1_trough_date:
+    type: number
+    tol: 0
+    grounding: true
+
+  R1_trough_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R1_max_drawdown_pct:
+    type: pct
+    tol: 0.01              # ±1pp, gold facts 自身声明的容差
+    grounding: true
+
+  R1_drawdown_price_consistency:
+    type: consistency
+    lhs: "R1_max_drawdown_pct"
+    rhs: "(R1_trough_price/R1_peak_price)-1"
+    tol: 0.01
+    methodology: true
+    # 不读取任何 GT——纯粹核验候选作品自己所引峰谷价格能否互算出自己所报的跌幅%。
+    # 这是 gold facts data_inconsistency #1 列为最高发陷阱的机械化版本。
+
+  R1_benchmark_return_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+    description: "沪深300 同期(2022-01-04 -> 04-26)收益率, 用于主动/被动判定的对照证据"
+
+  R1_premium_caliber:
+    type: present
+    # 候选作品声明的溢价率口径(拟合百元/均值/算术平均等)。纯审计字段, 不打
+    # grounding/methodology 标签——本轮的溢价率数值真值只有拟合百元口径一条序列,
+    # 未做 gt_variants 路由, 故此字段不参与路由决策, 只用于第二层判官核对
+    # "是否声明口径"这一独立缺陷(声明质量由 caliber_declared_global 承载)。
+
+  R1_premium_before_pct:
+    type: pct
+    tol: 0.025              # 拟合口径读数各家差 2-3pp, gold facts 自身声明的容差
+    grounding: true
+    description: "拟合百元口径, 2022年初(约28%)"
+
+  R1_premium_after_pct:
+    type: pct
+    tol: 0.025
+    grounding: true
+    description: "拟合百元口径, 2022年4月底(约18%)"
+
+  R1_premium_compression_pp:
+    type: reconcile
+    formula: "R1_premium_after_pct - R1_premium_before_pct"
+    tol: 0.015
+    methodology: true
+    # 若候选作品报告了收缩幅度(如"约-10pp"), 核验其是否等于自己所报前后溢价率之差——
+    # 捕获 pp(百分点)与%(相对变化)混用陷阱(如把 -10pp 误写/误算成 -35.7%)。
+
+  R1_driver_classification:
+    type: present
+    methodology: true
+    description: "候选作品对本轮收缩逻辑的明确判定(主动杀估值/被动跟随/两段混合)"
+
+  R1_recovery_ref:
+    type: present
+    # 路由字段, 不打标签。提取值: "from_high"(距2022-02-15低点)| "from_low"(距
+    # 2022-04-26低点)。两者终点相同(拟合溢价率回到约28%), 起点不同, 均为 gold
+    # facts 明确给出的合法计量起点。未声明则由评分器按数值推断(全组一次性)。
+
+  R1_recovery_days_valuation:
+    type: number
+    tol: 0.15
+    rel: true
+    grounding: true
+    gt_variants:
+      field: R1_recovery_ref
+      map: {from_high: R1_recov_from_high, from_low: R1_recov_from_low}
+    description: "估值修复(拟合溢价率回到约28%)所需交易日数, 按候选作品声明的计量起点路由"
+
+  # ===========================================================================
+  # R2: 2022年8月-12月, W型双腿
+  # (峰 2022-08-17/430.68 → leg1谷 2022-10-31/397.24 → 反弹 2022-11-04/408.81
+  #  → leg2谷=全轮收盘口径谷 2022-12-23/388.46)
+  # ===========================================================================
+
+  R2_peak_date:
+    type: number
+    tol: 0
+    grounding: true
+
+  R2_peak_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R2_leg1_low_date:
+    type: number
+    tol: 0
+    grounding: true
+    description: "W型第一腿低点月份(2022-10-31)"
+
+  R2_leg1_low_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R2_rebound_date:
+    type: number
+    tol: 0
+    grounding: true
+    description: "两腿之间的反弹高点月份(2022-11-04)"
+
+  R2_rebound_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R2_trough_date:
+    type: number
+    tol: 0
+    grounding: true
+    description: "W型第二腿低点=全轮收盘口径最终低点(2022-12-23)"
+
+  R2_trough_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R2_max_drawdown_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+    description: "全轮口径(峰 08-17 → 最终谷 12-23), 约-9.8%"
+
+  R2_drawdown_price_consistency:
+    type: consistency
+    lhs: "R2_max_drawdown_pct"
+    rhs: "(R2_trough_price/R2_peak_price)-1"
+    tol: 0.01
+    methodology: true
+
+  R2_leg1_benchmark_return_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+    description: "沪深300 同期(2022-08-17 -> 10-31), 约-16.8%"
+
+  R2_leg2_benchmark_return_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+    description: "沪深300 同期(2022-10-31 -> 12-23), 约+9.1%——正股涨、转债跌的脱钩腿, 是本轮'算深'的核心证据"
+
+  R2_premium_caliber:
+    type: present
+    # 路由/审计字段, 不打标签(同 R1_premium_caliber 的理由)。
+
+  R2_premium_before_pct:
+    type: pct
+    tol: 0.025
+    grounding: true
+    description: "拟合口径(华创), leg2 起点(2022年11月中, 约25.4%)"
+
+  R2_premium_after_pct:
+    type: pct
+    tol: 0.025
+    grounding: true
+    description: "拟合口径(华创), leg2 终点(2022年12月, 约21.3%)"
+
+  R2_premium_compression_pp:
+    type: reconcile
+    formula: "R2_premium_after_pct - R2_premium_before_pct"
+    tol: 0.015
+    methodology: true
+
+  R2_driver_classification:
+    type: present
+    methodology: true
+    description: "候选作品对本轮(尤其 leg2)收缩逻辑的明确判定; 深度答案应区分两腿性质不同"
+
+  R2_recovery_days_valuation:
+    type: number
+    tol: 0.35
+    rel: true
+    grounding: true
+    description: "估值修复(拟合溢价率回到约25%+)所需交易日数; gold facts 给出较宽区间(64-123), 故容差放宽"
+
+  # ===========================================================================
+  # R3: 2023年8月-2024年2月(峰 2023-08-04/414.36 → 谷 2024-02-05/370.86)
+  # ===========================================================================
+
+  R3_peak_date:
+    type: number
+    tol: 0
+    grounding: true
+
+  R3_peak_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R3_trough_date:
+    type: number
+    tol: 0
+    grounding: true
+
+  R3_trough_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R3_max_drawdown_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+
+  R3_drawdown_price_consistency:
+    type: consistency
+    lhs: "R3_max_drawdown_pct"
+    rhs: "(R3_trough_price/R3_peak_price)-1"
+    tol: 0.01
+    methodology: true
+
+  R3_benchmark_return_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+    description: "沪深300 同期(2023-08-04 -> 2024-02-05), 约-20.4%"
+
+  R3_premium_caliber:
+    type: present
+
+  R3_premium_after_pct:
+    type: pct
+    tol: 0.025
+    grounding: true
+    description: "拟合口径, 2024-02-05 低点(约18.3%)。本轮起点溢价率 gold facts 未给出精确值, 不设 before/compression 真值(见 provenance.coverage_gaps)"
+
+  R3_driver_classification:
+    type: present
+    methodology: true
+
+  R3_recovery_days_valuation:
+    type: number
+    tol: 0.15
+    rel: true
+    grounding: true
+    description: "估值修复(18.3% -> 26.19%, 华安口径), 约64个交易日, 至2024-05-20"
+
+  R3_recovery_days_point:
+    type: number
+    tol: 0.15
+    rel: true
+    grounding: true
+    description: "点位收复2023-08-04前高414.36, 约202个交易日, 至2024-12-10"
+
+  # ===========================================================================
+  # R4: 2024年5月-9月, 信用冲击轮(峰 2024-05-20/404.05 → 谷 2024-09-18/363.31)
+  # ===========================================================================
+
+  R4_peak_date:
+    type: number
+    tol: 0
+    grounding: true
+
+  R4_peak_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R4_trough_date:
+    type: number
+    tol: 0
+    grounding: true
+
+  R4_trough_price:
+    type: number
+    tol: 0.005
+    rel: true
+    grounding: true
+
+  R4_max_drawdown_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+
+  R4_drawdown_price_consistency:
+    type: consistency
+    lhs: "R4_max_drawdown_pct"
+    rhs: "(R4_trough_price/R4_peak_price)-1"
+    tol: 0.01
+    methodology: true
+
+  R4_benchmark_return_pct:
+    type: pct
+    tol: 0.01
+    grounding: true
+    description: "沪深300 同期(2024-05-20 -> 09-18), 约-14.1%; 本轮发生于债牛(资产荒)环境, 是判定'资产端信用风险驱动'而非'负债端赎回驱动'的关键对照"
+
+  R4_premium_caliber:
+    type: present
+
+  R4_premium_before_pct:
+    type: pct
+    tol: 0.025
+    grounding: true
+    description: "拟合口径, 2024-06-28(约26.28%)"
+
+  R4_premium_after_pct:
+    type: pct
+    tol: 0.025
+    grounding: true
+    description: "拟合口径, 2024-07-31(约15.4%)"
+
+  R4_premium_compression_pp:
+    type: reconcile
+    formula: "R4_premium_after_pct - R4_premium_before_pct"
+    tol: 0.015
+    methodology: true
+
+  R4_driver_classification:
+    type: present
+    methodology: true
+    description: "候选作品对本轮收缩逻辑的明确判定; 深度答案应识别为资产端信用风险驱动, 区别于前三轮的负债端驱动"
+
+  R4_recovery_days_point:
+    type: number
+    tol: 0.15
+    rel: true
+    grounding: true
+    description: "点位收复2024-05-20前高404.05, 约31个交易日, 至2024-11-07"
+
+  R4_valuation_recovery_incomplete_noted:
+    type: present
+    methodology: true
+    description: "候选作品是否明确指出本轮估值修复(拟合溢价率)截至2025年1月仍未完全回到中位——'点位修复速度与估值修复速度可以背离甚至反向'是本题最深一层, 见 gold facts reasoning_angle #6"
+
+  R4_credit_event_facts:
+    type: set_match
+    tol: 1                    # 允许缺1条(3条中至少命中2条即算通过)
+    grounding: true
+    description: >
+      2024年信用事件标志性事实, 提取为标识符集合(见 extraction_notes.md 的判定映射表):
+      LINGNAN_DEFAULT_20240814(岭南转债到期违约, 未兑付约4.89亿元) /
+      GUANGHUI_DELIST_20240828(广汇转债因正股面值退市连带摘牌, 非到期违约) /
+      SOUTE_FIRSTDEFAULT_20240517(搜特退债无法付息, 转债史首例实质违约)
+
+  # ===========================================================================
+  # 跨轮 / 全局字段(不属于任一单轮)
+  # ===========================================================================
+
+  rounds_covered_count:
+    type: count_min
+    target: 2
+    description: "候选作品实质复盘(给出可辨认起止时间+跌幅%数值, 而非泛泛提及)的轮次数量; 题面下限为2轮"
+
+  caliber_declared_global:
+    type: present
+    methodology: true
+    description: "候选作品是否在全文至少一处明确声明所用的溢价率口径(拟合百元/均值/算术平均)"
+
+  cross_round_recovery_comparison:
+    type: present
+    description: "候选作品是否将至少两轮的修复交易日数并排对比呈现(而非分散罗列)"
+
+  recovery_speed_equity_dependence_addressed:
+    type: present
+    description: "候选作品是否正面回答跨轮问题一: 转债估值修复速度与权益市场走势的依赖关系"
+
+  active_expansion_condition_addressed:
+    type: present
+    description: "候选作品是否正面回答跨轮问题二: 什么条件下转债溢价率存在主动扩张 vs 被动压缩的差异"

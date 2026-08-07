@@ -1,0 +1,85 @@
+# =============================================================================
+# S17 检查点模式 —— 马来西亚对八大贸易伙伴的贸易差额查询，由 irab-030 gold facts 人工重写
+# =============================================================================
+# 替换 eval-irab-import 自动起草版本：自动版本把每条 gold fact 误判成 pct 类型（因为句尾
+# "误差 相对±1%"里带 % 号），实际这些量是 RM 百万的金额，不是百分比——本版本改为正确的
+# number 类型 + rel:true 容差。
+#
+# 标签含义:
+#   grounding: true    -> 计入 D1 第一层 grounding_pass_fraction
+#   methodology: true  -> 计入 D2 第一层 methodology_pass_fraction
+#   两者皆无            -> 只计入整体 pass_fraction，不锚定任何维度分数
+
+fields:
+
+  # ===========================================================================
+  # A 组：8 个贸易伙伴的出口/进口/差额（RM 百万，外部真值）
+  # ===========================================================================
+  export_usa:       {type: number, tol: 0.01,  rel: true, grounding: true, description: "马来西亚 2026年1-2月累计 对美国出口(RM百万,FOB)"}
+  import_usa:        {type: number, tol: 0.01,  rel: true, grounding: true, description: "对美国进口(RM百万,CIF)"}
+  balance_usa:        {type: number, tol: 0.01,  rel: true, grounding: true, description: "对美国贸易差额(RM百万,正为顺差)"}
+
+  export_china:      {type: number, tol: 0.01,  rel: true, grounding: true, description: "对中国出口(RM百万)"}
+  import_china:       {type: number, tol: 0.01,  rel: true, grounding: true, description: "对中国进口(RM百万)"}
+  balance_china:       {type: number, tol: 0.01,  rel: true, grounding: true, description: "对中国贸易差额(RM百万,负为逆差)"}
+
+  export_singapore:  {type: number, tol: 0.015, rel: true, grounding: true, description: "对新加坡出口(RM百万)"}
+  import_singapore:   {type: number, tol: 0.015, rel: true, grounding: true, description: "对新加坡进口(RM百万)"}
+  balance_singapore:   {type: number, tol: 0.015, rel: true, grounding: true, description: "对新加坡贸易差额(RM百万)"}
+
+  export_india:      {type: number, tol: 0.02,  rel: true, grounding: true, description: "对印度出口(RM百万)"}
+  import_india:       {type: number, tol: 0.02,  rel: true, grounding: true, description: "对印度进口(RM百万)"}
+  balance_india:       {type: number, tol: 0.02,  rel: true, grounding: true, description: "对印度贸易差额(RM百万)"}
+
+  export_vietnam:    {type: number, tol: 0.02,  rel: true, grounding: true, description: "对越南出口(RM百万)"}
+  import_vietnam:     {type: number, tol: 0.02,  rel: true, grounding: true, description: "对越南进口(RM百万)"}
+  balance_vietnam:     {type: number, tol: 0.02,  rel: true, grounding: true, description: "对越南贸易差额(RM百万)"}
+
+  export_japan:      {type: number, tol: 0.02,  rel: true, grounding: true, description: "对日本出口(RM百万)"}
+  import_japan:       {type: number, tol: 0.02,  rel: true, grounding: true, description: "对日本进口(RM百万)"}
+  balance_japan:       {type: number, tol: 0.02,  rel: true, grounding: true, description: "对日本贸易差额(RM百万)"}
+
+  export_thailand:   {type: number, tol: 0.02,  rel: true, grounding: true, description: "对泰国出口(RM百万)"}
+  import_thailand:    {type: number, tol: 0.02,  rel: true, grounding: true, description: "对泰国进口(RM百万)"}
+  balance_thailand:    {type: number, tol: 0.02,  rel: true, grounding: true, description: "对泰国贸易差额(RM百万)"}
+
+  export_korea:      {type: number, tol: 0.02,  rel: true, grounding: true, description: "对韩国出口(RM百万)"}
+  import_korea:       {type: number, tol: 0.02,  rel: true, grounding: true, description: "对韩国进口(RM百万)"}
+  balance_korea:       {type: number, tol: 0.02,  rel: true, grounding: true, description: "对韩国贸易差额(RM百万,负为逆差)"}
+
+  # ===========================================================================
+  # B 组：全国合计（外部真值，覆盖全部贸易伙伴，不等于上述8国之和）
+  # ===========================================================================
+  export_total:  {type: number, tol: 0.01, rel: true, grounding: true, description: "马来西亚2026年1-2月累计出口总额(RM百万,FOB,全部贸易伙伴)"}
+  import_total:   {type: number, tol: 0.01, rel: true, grounding: true, description: "进口总额(RM百万,CIF,全部贸易伙伴)"}
+  balance_total:   {type: number, tol: 0.01, rel: true, grounding: true, description: "贸易差额合计(RM百万,全部贸易伙伴,不只是本题点名的8国)"}
+
+  # ===========================================================================
+  # C 组：D2 方法正确性 —— 内部一致性(候选作品自己的出口/进口数字能否算出自己的差额)
+  # ===========================================================================
+  balance_usa_consistency:       {type: consistency, lhs: "balance_usa",       rhs: "export_usa - import_usa",             tol: 30, methodology: true}
+  balance_china_consistency:     {type: consistency, lhs: "balance_china",     rhs: "export_china - import_china",         tol: 30, methodology: true}
+  balance_singapore_consistency: {type: consistency, lhs: "balance_singapore", rhs: "export_singapore - import_singapore", tol: 30, methodology: true}
+  balance_india_consistency:     {type: consistency, lhs: "balance_india",     rhs: "export_india - import_india",         tol: 30, methodology: true}
+  balance_vietnam_consistency:   {type: consistency, lhs: "balance_vietnam",   rhs: "export_vietnam - import_vietnam",     tol: 30, methodology: true}
+  balance_japan_consistency:     {type: consistency, lhs: "balance_japan",     rhs: "export_japan - import_japan",         tol: 30, methodology: true}
+  balance_thailand_consistency:  {type: consistency, lhs: "balance_thailand",  rhs: "export_thailand - import_thailand",   tol: 30, methodology: true}
+  balance_korea_consistency:     {type: consistency, lhs: "balance_korea",     rhs: "export_korea - import_korea",         tol: 30, methodology: true}
+  balance_total_consistency:     {type: consistency, lhs: "balance_total",     rhs: "export_total - import_total",         tol: 100, methodology: true}
+
+  # ===========================================================================
+  # D 组：口径声明与结论（present，喂 D2/D3）
+  # ===========================================================================
+  balance_definition_declared:
+    type: present
+    methodology: true
+    description: "候选作品是否明确声明'贸易差额最大'采用的定义(顺差最大 / 绝对值最大)——本题的核心口径分歧点"
+
+  answer_declared:
+    type: present
+    description: "候选作品是否按其声明的定义给出了一个明确的贸易伙伴结论(而非只列数据不下结论)"
+
+  all_eight_partners_present:
+    type: count_min
+    target: 8
+    description: "候选作品是否对8个贸易伙伴都给出了出口/进口/差额三项数据(而非只挑几个)"

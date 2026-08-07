@@ -1,0 +1,60 @@
+recipe_id: irab_030_anchors
+kind: calculator
+
+calculator:
+  script: skills/eval-groundtruth/scripts/irab_030_anchors.py
+  sidecar: skills/eval-groundtruth/scripts/irab_030_anchors.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    - export_usa
+    - import_usa
+    - balance_usa
+    - export_china
+    - import_china
+    - balance_china
+    - export_singapore
+    - import_singapore
+    - balance_singapore
+    - export_india
+    - import_india
+    - balance_india
+    - export_vietnam
+    - import_vietnam
+    - balance_vietnam
+    - export_japan
+    - import_japan
+    - balance_japan
+    - export_thailand
+    - import_thailand
+    - balance_thailand
+    - export_korea
+    - import_korea
+    - balance_korea
+    - export_total
+    - import_total
+    - balance_total
+  side_outputs: []
+
+inputs_required:
+  - name: groundtruth_snapshot.json
+    optional: true
+    na_policy: "可选(override); 默认 GT 为计算器内嵌的冻结值, 网络无关, 不需要此文件"
+
+self_check: required        # self_check.passed 为假即停止评测（calculator 方案）
+
+# ---------------------------------------------------------------------------
+# percent_fields 故意不声明: 本容器全部 grounding 量均为 number 类型(RM 百万金额)，
+# 不涉及百分比刻度换算问题。
+# ---------------------------------------------------------------------------
+
+design_note: >
+  全部27个真值键(8国×出口/进口/差额 + 全国合计×出口/进口/差额)均为真外部真值，
+  来自马来西亚统计局(DOSM)官方贸易统计公报。差额由出口-进口**计算**得出而非硬编码。
+
+  本题真正的难点不是"数据取不到"，而是"贸易差额最大"这一措辞本身有歧义：8国中有顺差
+  也有逆差，"差额最大"可以理解为"顺差最大"，也可以理解为"不论方向、绝对值最大"——两种
+  理解在数学上是不同的比较维度。gold facts 的 data_distortion 明确把"口径误读导致答案错
+  主体"列为常见错误。因此本容器**不设**"贸易差额最大的伙伴是谁"这一答案本身的检查点——
+  那正是本题要考察的口径判断，检查点只核验候选作品报出的逐国数据是否准确、内部是否自洽
+  (差额=出口-进口)，以及是否明确声明了自己采用的"最大"定义；候选作品在其声明的定义下
+  给出的结论是否正确，交给判官核对(D2/D3 第二层锚点)，不做成机械检查点。

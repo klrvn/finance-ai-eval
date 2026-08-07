@@ -1,0 +1,97 @@
+{
+  "task_id": "S18",
+  "version": "1.0.0",
+  "origin": "legacy-v1",
+  "authored_by": "human-reviewed, adapted from IRAB irab-014 (Investment Research Agent Benchmark, Rabyte Technology, CC BY 4.0); initial scaffold drafted by eval-irab-import (now removed from this repo)",
+  "origin_note": "First drafted by the (since-removed) eval-irab-import skill as a per-fact generic scaffold, then fully rewritten by hand: 44 real atomic grounding checkpoints, a working calculator with real GT values, two consistency checkpoints mechanizing the task's central 'restatement Q4 trap', and judge_notes anchors that keep both bull and bear reference material (gold does not predetermine a final direction, so this is not an answer leak -- see key_design_decisions).",
+  "design_thesis": "与 S14(转债回撤复盘)同源的双正交容器: 事实密度极高且判断深度要求也高, D1 与 D4 并列最高权重。44个真外部真值锚点覆盖会计差错更正前后两套口径、历史对照、分季度、2026Q1、合同负债、分红、估值、可比公司——D1 承载'取数是否扎实'; 本题最核心的陷阱(重述前后口径混算导致Q4虚假负值)由2个consistency检查点机械核验，不需要外部真值; 批价/渠道库存/股息率区间/回购计划等gold原文本身是区间的量，刻意不设点值真值。D4 承载多空逻辑本身的分析深度，这部分gold本身不预设唯一方向，交给判官凭证据是否扎实、逻辑是否自洽来评，不评方向对错。",
+  "classification_snapshot": {
+    "shape": "dense-fact-tier1",
+    "containerize": true,
+    "tier": "T1",
+    "objective_dims": [
+      "D1",
+      "D2"
+    ],
+    "weight_hints": {
+      "D1": 30,
+      "D2": 20,
+      "D3": 15,
+      "D4": 30,
+      "D5": 0,
+      "D6": 5
+    },
+    "citation_policy_hint": {
+      "mode": "none"
+    },
+    "cf_hints": [
+      "CF1",
+      "CF3",
+      "CF4",
+      "CF5"
+    ],
+    "rationale": [
+      "既有密集、带容差的 facts，又有 reasoning_angle_coverage/user_need_coverage 一类判断深度要求——事实核对与分析深度并重，落回 S14 自身的模式"
+    ],
+    "unmapped_fields": [],
+    "signals": {
+      "has_closure_identity": false,
+      "has_answer_correctness": false,
+      "has_skill_executability": false,
+      "has_formula_construction": false,
+      "has_calculation_correctness": false,
+      "has_reasoning_angle": true,
+      "has_user_need_coverage": false,
+      "has_data_completeness": false,
+      "has_data_inconsistency": true,
+      "has_source_authority": true,
+      "has_data_timeliness": true,
+      "has_non_consensus_view": false,
+      "has_chart_fidelity": false,
+      "facts_count": 13,
+      "tolerance_annotation_hits": 32,
+      "timeliness_signal_hits": 3
+    },
+    "task_id": "irab-014",
+    "irab_audit_rating": {
+      "line": "| **irab-014** | 五粮液多空综合分析 | **B** | 可核验：财务数据提取（与 S10 同构）。不可核验：多空逻辑质量和综合判断。建议 D1 高权重（数据提取正确）+ D4/D5 留给盲评 |",
+      "rating": "B"
+    }
+  },
+  "method_evidence": "52个检查点: 44个 grounding(重述前后4 + FY2025全年5 + 历史对照3 + 分季度8 + 2026Q1 4 + 合同负债3 + 分红2 + 估值4 + 可比公司11) + 2个 methodology consistency(季度闭合闭环) + 2个 methodology present(口径/估值指标声明) + 4个无标签 present(K组区间量审计字段) + 4个无标签 present(bull/bear/结论/指标表覆盖度)。",
+  "key_design_decisions": {
+    "bull_bear_not_an_answer_leak": "judge_notes.md 保留了 gold reasoning_angle_coverage 原文对多空双方论据的具体描述(如'2026Q1同比高增构成看多依据''批价倒挂构成看空依据')，这不构成盲评隔离违规——因为 gold 本身没有预设一个'唯一正确的最终方向'，多空双方的论据都是真实、可独立核验的事实，判官依据这些参照标准评估候选作品的论证深度与证据覆盖面，而不是拿候选作品的最终倾向性结论与一个隐藏答案比对。这与 S16/S17 的情况本质不同——那两题存在一个唯一的、当前隐藏的'正确答案'(哪个因子/哪个国家)，S18 不存在这种单一答案。",
+    "q4_trap_as_consistency_not_gt": "'不可用重述前前三季减重述后全年得出Q4负值'这一 gold 明确警示的最高发陷阱，机械化为 q_revenue_sum_consistency(候选作品自己报的四季度之和必须等于自己报的全年数字)，不需要外部真值——任何在内部使用了跨口径混算的候选作品，其自报的季度数字之和天然不会等于自报的全年数字，检查点会直接失败。",
+    "no_point_gt_for_ranges": "批价(挂牌840元 vs 实际成交770-800元)、渠道库存(1.5-2个月)、股息率(5.3%-5.8%)、回购计划(80-100亿)、集团增持计划(30-50亿)、账上货币资金(1200-1243亿)——gold原文对这六类量给出的都是区间，不存在单一正确值，一律不设点值真值，只设present型审计字段(K组)。分红总额(~200亿)与分红率(~223%)例外设了点值真值，因为gold对这两项给出的是具体的、有单一来源的数字(年度每10股派25.78元、合计约100.07亿元，加上中期分红可推算出约200亿总额)，不是区间。",
+    "comparables_scope_trimmed": "泸州老窖的可比数据只取了PE(TTM)与股息率两项(未取毛利率/分红率/Q4营收降幅)，贵州茅台取了7项(未取营业收入口径的第二个数字，因为gold本身就标注'茅台营收存营业总收入/营业收入口径差'，取一个口径已足够支撑D1锚定，第二个口径数字的教育价值在于D2第二层'口径不可混比'的判官锚点，不需要重复设检查点)——两家可比公司的数据密度按'足够支撑横向对照论证'而非'穷尽gold facts每个数字'来取，是有意的范围收缩。"
+  },
+  "prompt_deviation_from_irab": [
+    "把股票代码(000858.SZ)补进题面——原题只写'五粮液'，虽不构成实质歧义（没有同名易混淆标的），但补全代码是本容器家族的一致做法。",
+    "补充了会计口径声明、批价口径声明、分红率/分红额区分、PE(TTM)失真下估值指标选择这四处口径声明要求——原题面'先搜集数据...给出综合判断'没有点名这些分歧，candidate若不声明就可能在检查点/判官处被判定为口径混乱而不是被判 NA(grade_checkpoints.py 只有这两种状态)，补上题面要求使评分对齐。",
+    "补充了'请留意近期一个季度以内的重大事项'的提示——对应gold facts的data_timeliness要求，使该考点对候选人可见而非暗坑。"
+  ],
+  "irab_rubric_mapping": {
+    "facts": "44个grounding检查点(D1第一层)",
+    "source_authority": "D1第二层来源分级锚点",
+    "data_timeliness": "题面'近期重大事项'提示 + CF4(用重述前数据或旧批价冒充当前状态)",
+    "data_distortion": "D1第二层(张冠李戴/编造)锚点 + D2第二层(PE(TTM)失真解读)锚点",
+    "data_inconsistency": "q_revenue_sum_consistency/q_np_sum_consistency(第一层) + D2第二层(口径混用/分红率额混淆/估值倍数直接横向并列)锚点",
+    "reasoning_angle_coverage": "D4锚点(口径定性前置/看多看空逻辑深度/权衡综合判断)，判官不评方向对错只评论证是否扎实(见key_design_decisions.bull_bear_not_an_answer_leak)"
+  },
+  "coverage_gaps": {
+    "batch_price": "挂牌口径(约840元) vs 实际成交口径(约770-800元)——两种合法口径均为区间，不设点值真值",
+    "channel_inventory": "约1.5-2个月，区间值，不设点值真值",
+    "dividend_yield": "约5.3%-5.8%，区间值，不设点值真值(分红总额/分红率已独立设点值真值)",
+    "buyback_and_group_stake_and_cash": "回购约80-100亿元、集团拟增持约30-50亿元、账上货币资金约1200-1243亿元，均为区间值，不设点值真值",
+    "luzhou_secondary_metrics": "泸州老窖的毛利率/分红率/Q4营收降幅未设检查点，范围收缩说明见key_design_decisions.comparables_scope_trimmed"
+  },
+  "verification_log": {
+    "calculator_run": "2026-08-07 实测通过: 12/12 self_check, 44个GT值。重述前后前三季度确实不同(重述前更高)，四季度营收/净利润之和与全年一致(±0.05/±0.1亿)，真实Q4营收明显偏离跨口径混算的错误值(相差>50亿)，五粮液PE(TTM)明显高于贵州茅台PE(TTM)(印证重述导致的失真)。",
+    "spec_lint": "2026-08-07 实测: 0 error。",
+    "judge_notes_leak_audit": "2026-08-07 人工审阅确认: D4锚点保留的多空双方论据不构成答案泄漏(gold本身未预设唯一方向，见key_design_decisions)；与S16/S17不同类型的盲评隔离风险已分别核实。",
+    "gold_answer_key_dry_run": "pending —— 完整LLM抽取+盲评判官端到端跑通尚未做。"
+  },
+  "review_status": "draft",
+  "container_hash": "a2954808edfec6df",
+  "notes": "Family: equity-research-bull-bear(新家族)。Weights: D1:30 D2:20 D3:15 D4:30 D5:0 D6:5。CF: CF1+CF3+CF4+CF5(不含CF2, citation_policy=none)。52个检查点: 44 grounding + 2 methodology consistency + 2 methodology present + 8 无标签present。冻结前仍需完整LLM抽取+盲评判官端到端dry run。"
+}

@@ -1,0 +1,83 @@
+recipe_id: irab_014_anchors
+kind: calculator
+
+calculator:
+  script: skills/eval-groundtruth/scripts/irab_014_anchors.py
+  sidecar: skills/eval-groundtruth/scripts/irab_014_anchors.calculator.yaml
+  invocation: "--out {out} [--snapshot {snapshot}]"
+  produces:
+    - revenue_2025_9m_pre
+    - net_profit_2025_9m_pre
+    - revenue_2025_9m_post
+    - net_profit_2025_9m_post
+    - revenue_2025_full
+    - net_profit_2025_full
+    - gross_margin_2025
+    - gross_margin_2024
+    - operating_cashflow_2025
+    - revenue_2024_full
+    - net_profit_2024_full
+    - revenue_2023_full
+    - q1_2025_revenue
+    - q2_2025_revenue
+    - q3_2025_revenue
+    - q4_2025_revenue
+    - q1_2025_np
+    - q2_2025_np
+    - q3_2025_np
+    - q4_2025_np
+    - revenue_2026q1
+    - net_profit_2026q1
+    - gross_margin_2026q1
+    - operating_cashflow_2026q1
+    - contract_liability_2024_end
+    - contract_liability_2025_end
+    - contract_liability_2026q1_end
+    - dividend_total_fy2025
+    - dividend_payout_ratio_fy2025
+    - market_cap
+    - pb
+    - pe_ttm
+    - stock_price
+    - moutai_revenue_total_2025
+    - moutai_net_profit_2025
+    - moutai_gross_margin_2025
+    - moutai_pe_ttm
+    - moutai_pb
+    - moutai_dividend_yield
+    - moutai_payout_ratio
+    - luzhou_pe_ttm
+    - luzhou_dividend_yield
+    - baijiu_industry_revenue_yoy_2025
+    - baijiu_industry_netprofit_yoy_2025
+  side_outputs: []
+
+inputs_required:
+  - name: groundtruth_snapshot.json
+    optional: true
+    na_policy: "可选(override); 默认 GT 为计算器内嵌的冻结值, 网络无关, 不需要此文件"
+
+self_check: required        # self_check.passed 为假即停止评测（calculator 方案）
+
+# ---------------------------------------------------------------------------
+# percent_fields 故意不声明: 计算器已把 pct 类型量输出为 fraction 刻度, 与提取器
+# validators.py 的规范化结果同刻度。
+# ---------------------------------------------------------------------------
+
+design_note: >
+  真值分两类。第一类(44个GT键): 五粮液FY2025会计差错更正前后的前三季度数字、FY2025全年
+  (重述后)、历史对照(FY2024/FY2023, 未被重述调整)、2025分季度、2026Q1、合同负债、分红
+  总额与分红率、估值、以及贵州茅台/泸州老窖/白酒行业可比数据——全部为真外部真值, 来自
+  官方定期报告与公告。
+
+  第二类(有意不设点值真值): 批价(挂牌口径 vs 实际成交口径, 两者均为区间)、渠道库存(区间)、
+  股息率(区间, 分红总额/分红率已独立设点值真值)、回购计划/集团增持计划/账上货币资金(均为
+  区间)。gold facts 原文对这些量给出的就是区间或多口径, 不存在单一正确值; 给它们编一个
+  点值会惩罚"如实标注区间"这一 gold 明确要求的正确行为, 同时放行伪精确的答案——与
+  S12/S13/S14 的 why_no_*_gt 设计原则同源。
+
+  本题最核心的陷阱(gold facts data_inconsistency 列为"本题最高发"): 2025年收入确认口径
+  变更导致前三季度存在重述前(609.45亿)与重述后(306.38亿)两套数字, 不可用重述前前三季减
+  重述后全年得出Q4负值。这一陷阱由 checkpoint_schema.yaml 的 q_revenue_sum_consistency/
+  q_np_sum_consistency 两个 consistency 检查点机械核验(候选作品自己报的四个季度数字之和
+  必须等于自己报的全年数字), 不需要外部真值。

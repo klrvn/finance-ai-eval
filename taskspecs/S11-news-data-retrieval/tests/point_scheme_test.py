@@ -49,7 +49,7 @@ WORK = tempfile.mkdtemp(prefix="s11_test_")
 json.dump(schema, open(f"{WORK}/schema.json", "w", encoding="utf-8"), ensure_ascii=False)
 taskspec = {"task_id": "S11", "rubric_weights": spec["rubric_weights"],
             "objective_dims": spec["objective_dims"], "citation_policy": spec["citation_policy"],
-            "d1_objective_weights": spec["d1_objective_weights"],
+            "d1_objective_weights": spec.get("d1_objective_weights", {"citation": 0.0, "grounding": 1.0}),
             "grounding_group_weights": ggw, "checkpoint_schema": schema}
 json.dump(taskspec, open(f"{WORK}/taskspec.json", "w", encoding="utf-8"), ensure_ascii=False)
 
@@ -94,7 +94,7 @@ PERFECT = {
     "Q3_1_epic_fury_order_date": f(20260228),
     "Q3_2_two_week_ceasefire_date": f(20260407),
     "Q3_3_strait_reopen_announced_date": f(20260417),
-    "Q3_4_islamabad_talks_window": f({"talks_start": 20260611, "talks_end": 20260612}),
+    "Q3_4_islamabad_talks_window": f({"talks_start": 20260411, "talks_end": 20260412}),
     "Q3_5_mou_signed_date": f(20260617),
     "Q3_6_truce_declared_over_date": f(20260707),
     "caliber_dates_with_year": f("全部日期均写明 2026 年"),
@@ -142,9 +142,9 @@ CASES = [
     ("题目二第3题: one member wrong -> 0 (全对才给分)",
      variant(Q2_3_deal_terms={"deal_amount_yi_cny": 4.78, "stake_pct": 51}), 11.0),
     ("题目三第4点: only the start day -> 0 (no partial credit)",
-     variant(Q3_4_islamabad_talks_window={"talks_start": 20260611}), 11.0),
+     variant(Q3_4_islamabad_talks_window={"talks_start": 20260411}), 11.0),
     ("题目三第4点: end day off by one -> 0",
-     variant(Q3_4_islamabad_talks_window={"talks_start": 20260611, "talks_end": 20260613}), 11.0),
+     variant(Q3_4_islamabad_talks_window={"talks_start": 20260411, "talks_end": 20260413}), 11.0),
     ("题目三第2点: one day outside the accepted pair -> 0",
      variant(Q3_2_two_week_ceasefire_date=20260409), 11.0),
     ("题目三第5点: one day outside the accepted pair -> 0",

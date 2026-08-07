@@ -1,0 +1,45 @@
+{
+  "_comment": "S13 冻结锚点键的可读镜像。默认 GT 由 fab_capex_anchors.py 内嵌，本文件不参与评测；传 --snapshot 时才作为 override 生效。数据基准时点 2026-06-13。",
+  "_scale": "金额单位亿元(CNY)；naura_kingsemi_stake 与 ymtc_phase3_localization 为小数刻度(0.1787 == 17.87%)，与提取器 validators.py 同刻度——gt_recipe 不得声明 percent_fields。",
+  "values": {
+    "naura_revenue_2025": 393.53,
+    "amec_revenue_2025": 123.85,
+    "acmr_revenue_2025": 67.86,
+    "piotech_revenue_2025": 65.19,
+    "mattson_revenue_2025": 50.76,
+    "hwatsing_revenue_2025": 46.48,
+    "jingce_revenue_2025": 33.48,
+    "skyverse_revenue_2025": 20.53,
+    "kingsemi_revenue_2025": 19.48,
+    "cxmt_planned_raise": 295.0,
+    "cxmt_equip_capex_prospectus": 220.66,
+    "naura_kingsemi_stake": 0.1787,
+    "ymtc_phase3_localization": 0.55
+  },
+  "cxmt_use_of_proceeds": {
+    "dram_tech_upgrade": 130.0,
+    "line_tech_renovation": 75.0,
+    "forward_looking_rnd": 90.0
+  },
+  "_vendor_names": {
+    "naura": "北方华创 002371",
+    "amec": "中微公司 688012",
+    "acmr": "盛美上海 688082",
+    "piotech": "拓荆科技 688072",
+    "mattson": "屹唐股份",
+    "hwatsing": "华海清科 688120",
+    "jingce": "精测电子 300567",
+    "skyverse": "中科飞测 688361",
+    "kingsemi": "芯源微 688037"
+  },
+  "_deliberate_omission": {
+    "wanye": "万业企业（凯世通，离子注入）2025 年营收未取得可信结构化数据。刻意不设检查点——正确行为是留空或标注「待查」，设了真值就会奖励编造。"
+  },
+  "_caliber_notes": {
+    "cxmt_planned_raise": "拟募资额 295 亿 == 募投三项的募集资金投入之和（130+75+90）。创科创板拟募资额之最。",
+    "cxmt_project_total_investment": "募投项目总投资 345 亿（含自筹），与拟募资额是两个口径，不可互换。中芯国际的实募 532.3 亿是第三个口径，三者混标属口径缺陷。",
+    "cxmt_equip_capex_prospectus": "招股书披露的募投项目设备购置及安装费合计，作 fab 级设备强度锚，用于校验单万片设备单价假设。",
+    "naura_kingsemi_stake": "截至 2025-06-23，北方华创以两笔合计 31.35 亿元持有芯源微 3596.47 万股、占总股本 17.87%，成为第一大股东兼控股股东。公司层汇总须据此去重。",
+    "ymtc_phase3_localization": "长江存储武汉三期新产线国产设备采购占比「首次超过 50%」(2026-04)，显著高于国内晶圆厂平均 15-30%。阈值型事实，以带中值 0.55 + 容差 0.15 编码，通过带 [0.40, 0.70]。"
+  }
+}
